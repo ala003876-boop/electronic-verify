@@ -180,7 +180,7 @@ async function removeRole(userId, roleId) {
 
 async function getMember(userId) {
   const r = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-    headers: { Authorization: `Bot ${MTQ2NTExNDQ1Mzk1MDMzMzE2Mw.GMkZEa.RRJCki950cNiNaH5La2a2ePmVEfMsCAzoAMLsE}` },
+    headers: { Authorization: `Bot ${BOT_TOKEN}` },
   });
   const data = await r.json().catch(() => ({}));
   return { ok: r.ok, data };

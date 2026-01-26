@@ -1,14 +1,14 @@
+// server.js
 const express = require("express");
 const path = require("path");
-const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/public", express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, "public"))); // يخدم public/index.html
 
+// ====== ENV ======
 const {
-  PORT = 3000,
   BASE_URL,
   CLIENT_ID,
   CLIENT_SECRET,
@@ -29,237 +29,378 @@ if (
   !APPROVED_ROLE_ID ||
   !UNAPPROVED_ROLE_ID
 ) {
-  console.error("❌ نقص في متغيرات .env");
+  console.error("❌ نقص في متغيرات البيئة (Render ENV).");
   process.exit(1);
 }
 
-const KEEP_SET = new Set(
-  (KEEP_ROLE_IDS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-);
-
-// ====== تطبيع عربي بسيط لتقليل اختلافات الكتابة ======
-function normalize(s = "") {
-  return String(s)
-    .toLowerCase()
-    .replace(/[ـ]/g, "")
-    .replace(/[ًٌٍَُِّْ]/g, "")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-function includesAll(text, words) {
-  const t = normalize(text);
-  return words.every((w) => t.includes(normalize(w)));
-}
-function isNo(text) {
-  const t = normalize(text);
-  return t === "لا" || t.includes("لا") || t.includes("لا يحق");
-}
-function isYes(text) {
-  const t = normalize(text);
-  return t === "نعم" || t.includes("نعم") || t.includes("موافق") || t.includes("اوافق") || t.includes("أوافق");
+// ====== Helpers ======
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  const out = {};
+  header.split(";").forEach((part) => {
+    const [k, ...v] = part.trim().split("=");
+    if (!k) return;
+    out[k] = decodeURIComponent(v.join("=") || "");
+  });
+  return out;
 }
 
-// ====== التحقق من الإجابات ======
-function validateAnswers(a) {
-  const q1ok =
-    includesAll(a.q1, ["تقمص", "الشخصية"]) &&
-    (normalize(a.q1).includes("الواقعي") || normalize(a.q1).includes("الواقع"));
-
-  const q2ok =
-    normalize(a.q2).includes("مركبة") &&
-    (normalize(a.q2).includes("سلاح") || normalize(a.q2).includes("دهس"));
-
-  const q3ok =
-    (normalize(a.q3).includes("قتل") || normalize(a.q3).includes("قت")) &&
-    (normalize(a.q3).includes("بدون سبب") || normalize(a.q3).includes("عشوائي"));
-
-  const q4ok =
-    normalize(a.q4).includes("5") &&
-    normalize(a.q4).includes("دقائق") &&
-    (normalize(a.q4).includes("اذن") || normalize(a.q4).includes("إذن")) &&
-    normalize(a.q4).includes("مركز") &&
-    normalize(a.q4).includes("العمليات");
-
-  const q5ok = isNo(a.q5);
-  const q6ok = isNo(a.q6);
-  const q7ok = isNo(a.q7);
-  const q8ok = isNo(a.q8);
-
-  // الشروط 9-14 موافقة
-  const agreeOk = isYes(a.agree);
-
-  const ok = [q1ok, q2ok, q3ok, q4ok, q5ok, q6ok, q7ok, q8ok, agreeOk].every(Boolean);
-  return { ok };
+function setCookie(res, name, value, opts = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (opts.httpOnly) parts.push("HttpOnly");
+  if (opts.secure) parts.push("Secure");
+  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+  if (opts.path) parts.push(`Path=${opts.path}`);
+  if (opts.maxAge) parts.push(`Max-Age=${opts.maxAge}`);
+  res.setHeader("Set-Cookie", parts.join("; "));
 }
 
-// ====== OAuth (تسجيل الدخول) ======
-const states = new Map();
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+// ====== سؤال بنك (كثير + تتبدل) ======
+const QUESTION_BANK = [
+  {
+    id: "q1",
+    title: "ماهو الرول بلاي؟",
+    options: [
+      { k: "a", text: "تقمص الشخصية وتمثيل الحياة الواقعية داخل اللعبة", correct: true },
+      { k: "b", text: "اللعب بدون تقمص", correct: false },
+      { k: "c", text: "التحدث خارج المدينة عادي", correct: false },
+    ],
+  },
+  {
+    id: "q2",
+    title: "ماهو VDM؟",
+    options: [
+      { k: "a", text: "استخدام المركبة كسلاح ودهس اللاعبين", correct: true },
+      { k: "b", text: "صدم عرضي بسيط", correct: false },
+      { k: "c", text: "القيادة بسرعة عالية داخل المدينة دائمًا", correct: false },
+    ],
+  },
+  {
+    id: "q3",
+    title: "ماهو RDM؟",
+    options: [
+      { k: "a", text: "قتل اللاعبين بدون سبب/تهديد وبشكل عشوائي", correct: true },
+      { k: "b", text: "الدفاع عن النفس عند التهديد", correct: false },
+      { k: "c", text: "مطاردة شرطي داخل الرول بلاي", correct: false },
+    ],
+  },
+  {
+    id: "q4",
+    title: "متى يحق لك الصدم الاحترافي؟",
+    options: [
+      { k: "a", text: "بعد مرور 5 دقائق من المطاردة وأخذ الإذن من مركز العمليات", correct: true },
+      { k: "b", text: "مباشرة بعد بدء المطاردة", correct: false },
+      { k: "c", text: "بدون إذن بأي وقت", correct: false },
+    ],
+  },
+  {
+    id: "q5",
+    title: "إذا كنت برتبة رئيس رقباء يحق لك الاصطفاف العسكري؟",
+    options: [
+      { k: "a", text: "لا", correct: true },
+      { k: "b", text: "نعم", correct: false },
+    ],
+  },
+  {
+    id: "q6",
+    title: "هل يحق لك قطع بلاغ زميلك؟",
+    options: [
+      { k: "a", text: "لا", correct: true },
+      { k: "b", text: "نعم", correct: false },
+    ],
+  },
+  {
+    id: "q7",
+    title: "هل يحق لك صعود الجبل بسيارة سيدان أو رياضية؟",
+    options: [
+      { k: "a", text: "لا", correct: true },
+      { k: "b", text: "نعم", correct: false },
+    ],
+  },
+  // أسئلة إضافية من البنود 9-14 (تزيد عدد الأسئلة وتتلخبط)
+  {
+    id: "q8",
+    title: "هل يجب الالتزام بقوانين العسكر وعدم القيادة بتهور أو بسرعات غير واقعية؟",
+    options: [
+      { k: "a", text: "نعم", correct: true },
+      { k: "b", text: "لا", correct: false },
+    ],
+  },
+  {
+    id: "q9",
+    title: "هل يجب أن يكون لديك ميكروفون يعمل ومضبوط بشكل صحيح؟",
+    options: [
+      { k: "a", text: "نعم", correct: true },
+      { k: "b", text: "لا", correct: false },
+    ],
+  },
+  {
+    id: "q10",
+    title: "هل يمنع التحدث خارج الرول بلاي في جميع الأحوال؟",
+    options: [
+      { k: "a", text: "نعم، ممنوع", correct: true },
+      { k: "b", text: "لا، عادي", correct: false },
+    ],
+  },
+  {
+    id: "q11",
+    title: "هل تعتبر المعلومة من خارج المدينة (يوتيوب/بث/ديسكورد) مخالفة للرول بلاي؟",
+    options: [
+      { k: "a", text: "نعم", correct: true },
+      { k: "b", text: "لا", correct: false },
+    ],
+  },
+  {
+    id: "q12",
+    title: "إذا قبضت عليك الشرطة وطلب منك تسديد المخالفات، هل يجب عليك تسديدها؟",
+    options: [
+      { k: "a", text: "نعم", correct: true },
+      { k: "b", text: "لا", correct: false },
+    ],
+  },
+];
 
+// عدد الأسئلة اللي نعرضها كل مرة (يزيد ويغيّر)
+const QUESTIONS_PER_ATTEMPT = 10;
+
+// ====== Cooldown (محاولة واحدة/15 دقيقة) ======
+const cooldown = new Map(); // userId -> lastTimestamp
+const COOLDOWN_MS = 15 * 60 * 1000;
+
+// ====== Discord OAuth ======
 app.get("/auth/login", (req, res) => {
-  const state = crypto.randomBytes(16).toString("hex");
-  states.set(state, Date.now());
-
-  const redirectUri = encodeURIComponent(`${BASE_URL}/auth/callback`);
+  const redirectUri = `${BASE_URL}/auth/callback`;
   const url =
-    `https://discord.com/oauth2/authorize?client_id=${CLIENT_ID}` +
-    `&response_type=code&redirect_uri=${redirectUri}` +
-    `&scope=identify&state=${state}`;
-
+    "https://discord.com/api/oauth2/authorize" +
+    `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent("identify")}`;
   res.redirect(url);
 });
 
 app.get("/auth/callback", async (req, res) => {
   try {
-    const { code, state } = req.query;
-    if (!code || !state || !states.has(state)) return res.status(400).send("Invalid state.");
-    states.delete(state);
+    const code = req.query.code;
+    if (!code) return res.status(400).send("Missing code");
 
-    const redirect_uri = `${BASE_URL}/auth/callback`;
+    const redirectUri = `${BASE_URL}/auth/callback`;
+
+    const body = new URLSearchParams();
+    body.set("client_id", CLIENT_ID);
+    body.set("client_secret", CLIENT_SECRET);
+    body.set("grant_type", "authorization_code");
+    body.set("code", code);
+    body.set("redirect_uri", redirectUri);
 
     const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        grant_type: "authorization_code",
-        code,
-        redirect_uri,
-      }),
+      body,
     });
+
+    if (!tokenRes.ok) {
+      const t = await tokenRes.text();
+      return res.status(400).send("OAuth token error: " + t);
+    }
 
     const tokenData = await tokenRes.json();
-    if (!tokenRes.ok) return res.status(400).send("OAuth token error.");
+    const accessToken = tokenData.access_token;
 
-    const userRes = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    const meRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const user = await userRes.json();
-    if (!userRes.ok) return res.status(400).send("OAuth user error.");
 
-    res.setHeader("Set-Cookie", `uid=${user.id}; Path=/; HttpOnly; SameSite=Lax`);
-    res.redirect("/#authed");
+    if (!meRes.ok) {
+      const t = await meRes.text();
+      return res.status(400).send("Fetch user error: " + t);
+    }
+
+    const me = await meRes.json();
+
+    // خزّن user id في cookie (بدون أي توكن)
+    setCookie(res, "uid", me.id, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24, // يوم
+    });
+
+    res.redirect("/"); // يرجع للصفحة
   } catch (e) {
     console.error(e);
-    res.status(500).send("Server error.");
+    res.status(500).send("Server error in callback");
   }
 });
 
-function getCookie(req, name) {
-  const raw = req.headers.cookie || "";
-  const m = raw.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return m ? decodeURIComponent(m[1]) : null;
-}
+app.get("/auth/logout", (req, res) => {
+  setCookie(res, "uid", "", { path: "/", maxAge: 0 });
+  res.redirect("/");
+});
 
-// ====== Helpers: Discord role add/remove ======
-async function addRole(userId, roleId) {
-  if (!roleId) return true;
-  const r = await fetch(
-    `https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}/roles/${roleId}`,
-    { method: "PUT", headers: { Authorization: `Bot ${BOT_TOKEN}` } }
-  );
-  return r.ok || r.status === 204;
-}
+// ====== Serve page ======
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
-async function removeRole(userId, roleId) {
-  if (!roleId) return true;
-  const r = await fetch(
-    `https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}/roles/${roleId}`,
-    { method: "DELETE", headers: { Authorization: `Bot ${BOT_TOKEN}` } }
-  );
-  return r.ok || r.status === 204;
-}
+// ====== API: get randomized questions (بدون الإجابة الصحيحة) ======
+app.get("/api/questions", (req, res) => {
+  const cookies = parseCookies(req);
+  const uid = cookies.uid || null;
 
-async function getMember(userId) {
-  const r = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-    headers: { Authorization: `Bot ${BOT_TOKEN}` },
+  const selected = shuffle(QUESTION_BANK).slice(0, QUESTIONS_PER_ATTEMPT).map((q) => {
+    const options = shuffle(q.options).map((o) => ({ k: o.k, text: o.text })); // بدون correct
+    return { id: q.id, title: q.title, options };
   });
-  const data = await r.json().catch(() => ({}));
-  return { ok: r.ok, data };
-}
 
-async function removeAllOtherRoles(userId, keepIds) {
-  const { ok, data } = await getMember(userId);
-  if (!ok) return false;
+  res.json({
+    loggedIn: !!uid,
+    questions: selected,
+    cooldown: uid && cooldown.has(uid) ? Math.max(0, COOLDOWN_MS - (Date.now() - cooldown.get(uid))) : 0,
+  });
+});
 
-  const roles = Array.isArray(data.roles) ? data.roles : [];
-  for (const rid of roles) {
-    if (!keepIds.has(rid)) {
-      await removeRole(userId, rid).catch(() => {});
-    }
+// ====== Discord REST helpers ======
+async function discordRequest(method, url, body) {
+  const res = await fetch("https://discord.com/api/v10" + url, {
+    method,
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`${method} ${url} failed: ${res.status} ${t}`);
   }
-  return true;
+  return res.status === 204 ? null : res.json();
 }
 
-// ====== submit ======
+function toSet(listStr) {
+  return new Set(
+    (listStr || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+}
+
+// ====== Submit ======
 app.post("/submit", async (req, res) => {
   try {
-    const uid = getCookie(req, "uid");
-    if (!uid) return res.status(401).json({ ok: false, msg: "لازم تسجّل دخول ديسكورد أول." });
+    const cookies = parseCookies(req);
+    const uid = cookies.uid;
 
-    const answers = {
-      q1: req.body.q1,
-      q2: req.body.q2,
-      q3: req.body.q3,
-      q4: req.body.q4,
-      q5: req.body.q5,
-      q6: req.body.q6,
-      q7: req.body.q7,
-      q8: req.body.q8,
-      agree: req.body.agree,
-    };
-
-    const verdict = validateAnswers(answers);
-
-    if (!verdict.ok) {
-      // ❌ غلط: أعطه غير موافق وشيل موافق
-      await addRole(uid, UNAPPROVED_ROLE_ID).catch(() => {});
-      await removeRole(uid, APPROVED_ROLE_ID).catch(() => {});
-      if (EXTRA_ROLE_ID) await removeRole(uid, EXTRA_ROLE_ID).catch(() => {});
-      return res.json({ ok: false, msg: "❌ إجاباتك فيها خطأ. تم وضعك: غير موافق على الشروط." });
+    if (!uid) {
+      return res.status(401).json({ ok: false, message: "لازم تسجل دخول ديسكورد أول." });
     }
 
-    // ✅ صح: شيل غير موافق
-    await removeRole(uid, UNAPPROVED_ROLE_ID).catch(() => {});
-
-    // ✅ أعطه موافق
-    const okApproved = await addRole(uid, APPROVED_ROLE_ID);
-    if (!okApproved) {
-      return res.status(500).json({
+    // cooldown check
+    const last = cooldown.get(uid) || 0;
+    const now = Date.now();
+    if (now - last < COOLDOWN_MS) {
+      const left = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
+      return res.status(429).json({
         ok: false,
-        msg: "❌ ما قدرت أعطيك رول الموافقة. تأكد البوت عنده Manage Roles ورتبته أعلى من رول الموافقة.",
+        message: `محاولة واحدة فقط كل 15 دقيقة. باقي ${left} ثانية.`,
       });
     }
 
-    // ✅ رول إضافي (اختياري)
-    if (EXTRA_ROLE_ID) await addRole(uid, EXTRA_ROLE_ID).catch(() => {});
+    const { answers, agree } = req.body;
 
-    // ✅ حذف كل الرولات الأخرى (مع استثناءات)
-    const mustKeep = new Set([
-      APPROVED_ROLE_ID,
-      UNAPPROVED_ROLE_ID, // نحطه ضمن keep عشان ما يتعطل لو كان موجود لحظة التبديل (بس حنا نشيله فوق)
-      ...(EXTRA_ROLE_ID ? [EXTRA_ROLE_ID] : []),
-      ...KEEP_SET,
-    ]);
+    // تأكيد الشروط
+    if (String(agree) !== "true") {
+      return res.json({ ok: false, message: "لازم توافق على الشروط." });
+    }
 
-    await removeAllOtherRoles(uid, mustKeep).catch(() => {});
+    // answers: array [{id, k}]
+    let parsed = [];
+    try {
+      parsed = typeof answers === "string" ? JSON.parse(answers) : answers;
+      if (!Array.isArray(parsed)) throw new Error("bad answers");
+    } catch {
+      return res.status(400).json({ ok: false, message: "إجابات غير صالحة." });
+    }
 
-    return res.json({ ok: true, msg: "✅ تم التفعيل! تم إعطاؤك رول موافق على الشروط." });
+    // تحقق الإجابات (لازم كلها صح)
+    const bankMap = new Map(QUESTION_BANK.map((q) => [q.id, q]));
+    let correctCount = 0;
+
+    for (const a of parsed) {
+      const q = bankMap.get(a.id);
+      if (!q) continue;
+      const opt = q.options.find((o) => o.k === a.k);
+      if (opt && opt.correct) correctCount++;
+    }
+
+    const required = parsed.length; // لازم كل اللي انعرض اختاره صح
+    const passed = correctCount === required && required > 0;
+
+    // سجل المحاولة (حتى لو رسب)
+    cooldown.set(uid, now);
+
+    // جلب العضو من السيرفر
+    const member = await discordRequest("GET", `/guilds/${GUILD_ID}/members/${uid}`);
+
+    const keep = toSet(KEEP_ROLE_IDS);
+    // دائمًا نُبقي:
+    keep.add(APPROVED_ROLE_ID);
+    keep.add(UNAPPROVED_ROLE_ID);
+    if (EXTRA_ROLE_ID) keep.add(EXTRA_ROLE_ID);
+
+    // لو نجح: أعطه موافق + شيل غير موافق + احذف باقي الرولات (إلا keep)
+    if (passed) {
+      // add approved
+      await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`);
+      // remove unapproved
+      await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`);
+
+      // remove other roles
+      const rolesToRemove = (member.roles || []).filter((rid) => !keep.has(rid));
+      for (const rid of rolesToRemove) {
+        await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${rid}`);
+      }
+
+      // add extra (اختياري)
+      if (EXTRA_ROLE_ID) {
+        await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${EXTRA_ROLE_ID}`);
+      }
+
+      return res.json({
+        ok: true,
+        passed: true,
+        message: "✅ تم التفعيل بنجاح وتم إعطاؤك رتبة (موافق على الشروط).",
+      });
+    }
+
+    // لو رسب: أعطه غير موافق (ويشيل موافق لو موجود)
+    await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`);
+    await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`).catch(() => null);
+
+    return res.json({
+      ok: true,
+      passed: false,
+      message: "❌ إجاباتك غير صحيحة. حاول بعد 15 دقيقة.",
+    });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ ok: false, msg: "Server error." });
+    return res.status(500).json({ ok: false, message: "Server error" });
   }
 });
 
+// ====== Start ======
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Web Verify running: ${BASE_URL}`);
+  console.log(`✅ Web Verify running: ${BASE_URL} (port ${PORT})`);
 });
-

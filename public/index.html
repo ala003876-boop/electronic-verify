@@ -1,104 +1,190 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-<meta charset="UTF-8">
-<title>التفعيل الإلكتروني</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-body {
-  background:#0f172a;
-  color:#e5e7eb;
-  font-family:Tahoma;
-  direction:rtl;
-  padding:20px;
-}
-.box {
-  max-width:900px;
-  margin:auto;
-  background:#020617;
-  padding:25px;
-  border-radius:12px;
-}
-h1 { text-align:center; color:#38bdf8; }
-.q { margin-bottom:18px; }
-label { display:block; margin-bottom:6px; font-weight:bold; }
-.options label { font-weight:normal; margin-right:10px; }
-button {
-  width:100%;
-  padding:14px;
-  background:#22c55e;
-  border:none;
-  border-radius:10px;
-  font-size:16px;
-  cursor:pointer;
-}
-button:hover { background:#16a34a; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>التفعيل الإلكتروني</title>
+  <style>
+    body{background:#0f172a;color:#e5e7eb;font-family:Tahoma;direction:rtl;padding:22px}
+    .box{max-width:980px;margin:auto;background:#020617;border-radius:14px;padding:22px;box-shadow:0 0 30px rgba(0,0,0,.45)}
+    h1{margin:0 0 14px;text-align:center;color:#38bdf8}
+    .topbar{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+    .btn{padding:10px 14px;border-radius:10px;border:0;cursor:pointer;font-weight:bold}
+    .btnLogin{background:#5865F2;color:#fff}
+    .btnLogout{background:#334155;color:#fff}
+    .btnSubmit{width:100%;background:#22c55e;color:#07110b;font-size:16px;padding:14px}
+    .btnSubmit:disabled{opacity:.6;cursor:not-allowed}
+    .card{background:#0b1223;border:1px solid #1f2a44;border-radius:12px;padding:14px;margin:12px 0}
+    .qtitle{font-weight:bold;margin-bottom:10px}
+    .opt{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
+    .muted{color:#9ca3af;font-size:13px}
+    .msg{margin-top:12px;padding:12px;border-radius:12px;display:none}
+    .ok{background:#052e16;border:1px solid #14532d}
+    .bad{background:#2a0b0b;border:1px solid #7f1d1d}
+    .warn{background:#1d1f05;border:1px solid #5a4f14}
+    .line{height:1px;background:#1f2a44;margin:12px 0}
+  </style>
 </head>
 <body>
+  <div class="box">
+    <h1>📋 التفعيل الإلكتروني</h1>
 
-<div class="box">
-<h1>📋 التفعيل الإلكتروني</h1>
+    <div class="topbar">
+      <div id="status" class="muted">جارٍ التحميل…</div>
+      <div>
+        <button id="loginBtn" class="btn btnLogin" style="display:none">تسجيل دخول ديسكورد</button>
+        <button id="logoutBtn" class="btn btnLogout" style="display:none">تسجيل خروج</button>
+      </div>
+    </div>
 
-<form method="POST" action="/submit">
+    <div id="cooldownBox" class="msg warn"></div>
 
-<div class="q">
-<label>1- ماهو الرول بلاي؟</label>
-<div class="options">
-<label><input type="radio" name="q1" value="true" required> تقمص الشخصية وتمثيل الحياة الواقعية</label>
-<label><input type="radio" name="q1" value="false"> اللعب بدون تقمص</label>
-</div>
-</div>
+    <form id="form">
+      <div id="questions"></div>
 
-<div class="q">
-<label>2- ماهو VDM؟</label>
-<div class="options">
-<label><input type="radio" name="q2" value="true" required> استخدام المركبة كسلاح</label>
-<label><input type="radio" name="q2" value="false"> صدم عرضي</label>
-</div>
-</div>
+      <div class="card">
+        <div class="qtitle">✅ الموافقة على الشروط</div>
+        <label class="opt">
+          <input type="radio" name="agree" value="true" required />
+          <span>موافق على الشروط</span>
+        </label>
+        <label class="opt">
+          <input type="radio" name="agree" value="false" />
+          <span>غير موافق</span>
+        </label>
+        <div class="muted">لازم توافق عشان يتم التفعيل.</div>
+      </div>
 
-<div class="q">
-<label>3- ماهو RDM؟</label>
-<div class="options">
-<label><input type="radio" name="q3" value="true" required> قتل بدون سبب</label>
-<label><input type="radio" name="q3" value="false"> دفاع عن النفس</label>
-</div>
-</div>
+      <button id="submitBtn" class="btn btnSubmit" type="submit">إرسال</button>
+    </form>
 
-<div class="q">
-<label>4- متى يحق الصدم الاحترافي؟</label>
-<div class="options">
-<label><input type="radio" name="q4" value="true" required> بعد 5 دقائق وأخذ الإذن</label>
-<label><input type="radio" name="q4" value="false"> مباشرة</label>
-</div>
-</div>
+    <div id="result" class="msg"></div>
+    <div class="line"></div>
+    <div class="muted">ملاحظة: الأسئلة والخيارات تتغير تلقائيًا كل مرة.</div>
+  </div>
 
-<div class="q">
-<label>5- هل يحق لرئيس رقباء الاصطفاف العسكري؟</label>
-<div class="options">
-<label><input type="radio" name="q5" value="false" required> لا</label>
-<label><input type="radio" name="q5" value="true"> نعم</label>
-</div>
-</div>
+<script>
+  const statusEl = document.getElementById("status");
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const qWrap = document.getElementById("questions");
+  const resultEl = document.getElementById("result");
+  const cooldownBox = document.getElementById("cooldownBox");
+  const submitBtn = document.getElementById("submitBtn");
 
-<div class="q">
-<label>6- هل يحق قطع بلاغ زميلك؟</label>
-<div class="options">
-<label><input type="radio" name="q6" value="false" required> لا</label>
-<label><input type="radio" name="q6" value="true"> نعم</label>
-</div>
-</div>
+  function fmt(sec){
+    sec = Math.max(0, sec|0);
+    const m = Math.floor(sec/60);
+    const s = sec%60;
+    return `${m} دقيقة و ${s} ثانية`;
+  }
 
-<div class="q">
-<label>7- صعود الجبل بسيارة سيدان أو رياضية؟</label>
-<div class="options">
-<label><input type="radio" name="q7" value="false" required> لا</label>
-<label><input type="radio" name="q7" value="true"> نعم</label>
-</div>
-</div>
+  async function loadQuestions(){
+    resultEl.style.display = "none";
+    cooldownBox.style.display = "none";
+    qWrap.innerHTML = "";
+    statusEl.textContent = "جارٍ التحميل…";
 
-<div class="q">
-<label>8- هل يحق قطع بلاغ زميلك؟</label>
-<div class="options">
-<label><input type="radio" name="q8" value="false" required> لا</label>
+    const r = await fetch("/api/questions");
+    const data = await r.json();
+
+    if (!data.loggedIn){
+      statusEl.textContent = "لازم تسجل دخول ديسكورد قبل التفعيل.";
+      loginBtn.style.display = "inline-block";
+      logoutBtn.style.display = "none";
+      submitBtn.disabled = true;
+      loginBtn.onclick = () => location.href = "/auth/login";
+      return;
+    }
+
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+    logoutBtn.onclick = () => location.href = "/auth/logout";
+    submitBtn.disabled = false;
+
+    // عرض التبريد
+    if (data.cooldown && data.cooldown > 0){
+      cooldownBox.className = "msg warn";
+      cooldownBox.style.display = "block";
+      cooldownBox.textContent = `⏳ لديك محاولة واحدة كل 15 دقيقة. باقي: ${fmt(Math.ceil(data.cooldown/1000))}`;
+    }
+
+    statusEl.textContent = "اختر الإجابة الصحيحة لكل سؤال.";
+
+    // بناء الأسئلة
+    data.questions.forEach((q, idx) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.dataset.qid = q.id;
+
+      const title = document.createElement("div");
+      title.className = "qtitle";
+      title.textContent = `${idx+1}- ${q.title}`;
+      card.appendChild(title);
+
+      q.options.forEach(opt => {
+        const label = document.createElement("label");
+        label.className = "opt";
+        label.innerHTML = `
+          <input type="radio" name="${q.id}" value="${opt.k}" required>
+          <span>${opt.text}</span>
+        `;
+        card.appendChild(label);
+      });
+
+      qWrap.appendChild(card);
+    });
+  }
+
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    resultEl.style.display = "none";
+
+    // جمع الإجابات
+    const answers = [];
+    document.querySelectorAll(".card[data-qid]").forEach(card => {
+      const qid = card.dataset.qid;
+      const chosen = card.querySelector(`input[name="${qid}"]:checked`);
+      if (chosen){
+        answers.push({ id: qid, k: chosen.value });
+      }
+    });
+
+    const agree = document.querySelector('input[name="agree"]:checked')?.value || "false";
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "جارٍ الإرسال…";
+
+    try{
+      const res = await fetch("/submit", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ answers, agree })
+      });
+      const out = await res.json();
+
+      resultEl.style.display = "block";
+      if (!out.ok){
+        resultEl.className = "msg bad";
+        resultEl.textContent = out.message || "Server error";
+      } else {
+        resultEl.className = out.passed ? "msg ok" : "msg bad";
+        resultEl.textContent = out.message || (out.passed ? "تم" : "لم يتم");
+      }
+
+      // بعد الإرسال: أعد تحميل الأسئلة ليصير تلخبط جديد + تحديث التبريد
+      await loadQuestions();
+    }catch(err){
+      resultEl.style.display = "block";
+      resultEl.className = "msg bad";
+      resultEl.textContent = "Server error";
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "إرسال";
+    }
+  });
+
+  loadQuestions();
+</script>
+</body>
+</html>

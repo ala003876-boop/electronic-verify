@@ -410,7 +410,31 @@ app.post("/submit", async (req, res) => {
     });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ ok: false, message: "Server error" });
+   } catch (e) {
+  console.error("SUBMIT_ERROR:", e?.message || e);
+
+  // لو المستخدم مو داخل السيرفر
+  if (String(e?.message || "").includes("GET /guilds") && String(e?.message || "").includes("404")) {
+    return res.status(400).json({
+      ok: false,
+      message: "❌ لازم تكون داخل السيرفر قبل التفعيل. ادخل السيرفر ثم جرّب.",
+    });
+  }
+
+  // صلاحيات/رتب
+  if (String(e?.message || "").includes("403")) {
+    return res.status(400).json({
+      ok: false,
+      message: "❌ البوت ما عنده صلاحية كافية. تأكد من Manage Roles وأن رتبة البوت فوق الرتب المطلوبة.",
+    });
+  }
+
+  return res.status(500).json({
+    ok: false,
+    message: `❌ خطأ بالسيرفر: ${e?.message || "غير معروف"}`,
+  });
+}
+
   }
 });
 

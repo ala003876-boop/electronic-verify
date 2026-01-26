@@ -81,8 +81,7 @@
   }
 
   async function loadQuestions(){
-    resultEl.style.display = "none";
-    cooldownBox.style.display = "none";
+    // ✅ لا نخفي النتيجة هنا عشان ما تختفي رسالة النجاح/الرسوب
     qWrap.innerHTML = "";
     statusEl.textContent = "جارٍ التحميل…";
 
@@ -97,6 +96,7 @@
       logoutBtn.style.display = "none";
       submitBtn.disabled = true;
       loginBtn.onclick = () => location.href = "/auth/login";
+      cooldownBox.style.display = "none";
       return;
     }
 
@@ -105,12 +105,14 @@
     logoutBtn.onclick = () => location.href = "/auth/logout";
     submitBtn.disabled = false;
 
+    // عرض التبريد (إذا موجود)
     if (data.cooldown && data.cooldown > 0){
       cooldownBox.className = "msg warn";
       cooldownBox.style.display = "block";
       cooldownBox.textContent = `⏳ لديك محاولة واحدة كل 15 دقيقة عند الرسوب فقط. باقي: ${fmt(Math.ceil(data.cooldown/1000))}`;
-      // نقدر نخلي الإرسال مقفل وقت الانتظار
       submitBtn.disabled = true;
+    } else {
+      cooldownBox.style.display = "none";
     }
 
     statusEl.textContent = "اختر الإجابة الصحيحة لكل سؤال.";
@@ -141,6 +143,8 @@
 
   document.getElementById("form").addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    // عند بداية إرسال جديد نخفي نتيجة قديمة
     resultEl.style.display = "none";
 
     const answers = [];
@@ -163,12 +167,15 @@
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ answers, agree })
       });
-      const out = await res.json();
 
+      const out = await res.json().catch(() => ({ ok:false, message:"Server error" }));
+
+      // ✅ اعرض النتيجة وخليها ثابتة
       resultEl.style.display = "block";
       resultEl.className = out.passed ? "msg ok" : "msg bad";
       resultEl.textContent = out.message || "تم";
 
+      // ✅ حدث الأسئلة والتبريد بدون ما نخفي النتيجة
       await loadQuestions();
     }catch(err){
       resultEl.style.display = "block";

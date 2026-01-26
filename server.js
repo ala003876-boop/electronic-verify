@@ -356,7 +356,7 @@ app.post("/submit", async (req, res) => {
     // ✅ سماحية خطأين
     const passed = required > 0 && wrongCount <= ALLOWED_WRONG;
 
-    // جلب العضو
+    // جلب العضو (يتأكد أنه داخل السيرفر)
     const member = await discordRequest("GET", `/guilds/${GUILD_ID}/members/${uid}`);
 
     const keep = toSet(KEEP_ROLE_IDS);
@@ -389,6 +389,7 @@ app.post("/submit", async (req, res) => {
 
         return res.json({ ok: true, passed: true, message: msg });
       } catch (e) {
+        console.error("ROLE_ASSIGN_ERROR:", e?.message || e);
         return res.status(500).json({
           ok: false,
           message:
@@ -409,37 +410,27 @@ app.post("/submit", async (req, res) => {
       message: `❌ عندك ${wrongCount} أخطاء. المسموح ${ALLOWED_WRONG} فقط. حاول بعد 15 دقيقة.`,
     });
   } catch (e) {
-    console.error(e);
-   } catch (e) {
-  console.error("SUBMIT_ERROR:", e?.message || e);
+    console.error("SUBMIT_ERROR:", e?.message || e);
 
-  // لو المستخدم مو داخل السيرفر
-  if (String(e?.message || "").includes("GET /guilds") && String(e?.message || "").includes("404")) {
-    return res.status(400).json({
+    // لو المستخدم مو داخل السيرفر
+    if (String(e?.message || "").includes("GET /guilds") && String(e?.message || "").includes("404")) {
+      return res.status(400).json({
+        ok: false,
+        message: "❌ لازم تكون داخل السيرفر قبل التفعيل. ادخل السيرفر ثم جرّب.",
+      });
+    }
+
+    // صلاحيات/رتب
+    if (String(e?.message || "").includes("403")) {
+      return res.status(400).json({
+        ok: false,
+        message: "❌ البوت ما عنده صلاحية كافية. تأكد من Manage Roles وأن رتبة البوت فوق الرتب المطلوبة.",
+      });
+    }
+
+    return res.status(500).json({
       ok: false,
-      message: "❌ لازم تكون داخل السيرفر قبل التفعيل. ادخل السيرفر ثم جرّب.",
+      message: `❌ خطأ بالسيرفر: ${e?.message || "غير معروف"}`,
     });
   }
-
-  // صلاحيات/رتب
-  if (String(e?.message || "").includes("403")) {
-    return res.status(400).json({
-      ok: false,
-      message: "❌ البوت ما عنده صلاحية كافية. تأكد من Manage Roles وأن رتبة البوت فوق الرتب المطلوبة.",
-    });
-  }
-
-  return res.status(500).json({
-    ok: false,
-    message: `❌ خطأ بالسيرفر: ${e?.message || "غير معروف"}`,
-  });
-}
-
-  }
-});
-
-// ====== Start ======
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ Web Verify running: ${BASE_URL} (port ${PORT})`);
 });

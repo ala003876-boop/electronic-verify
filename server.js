@@ -1,13 +1,12 @@
-// server.js
 const express = require("express");
 const path = require("path");
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public"))); // يخدم public/index.html
+app.use(express.static(path.join(__dirname, "public")));
 
-// ====== ENV ======
+// ===== ENV =====
 const {
   BASE_URL,
   CLIENT_ID,
@@ -29,11 +28,11 @@ if (
   !APPROVED_ROLE_ID ||
   !UNAPPROVED_ROLE_ID
 ) {
-  console.error("❌ نقص في متغيرات البيئة (Render ENV).");
+  console.error("❌ نقص في متغيرات البيئة (Render ENV)");
   process.exit(1);
 }
 
-// ====== Helpers ======
+// ===== Helpers =====
 function parseCookies(req) {
   const header = req.headers.cookie || "";
   const out = {};
@@ -43,16 +42,6 @@ function parseCookies(req) {
     out[k] = decodeURIComponent(v.join("=") || "");
   });
   return out;
-}
-
-function setCookie(res, name, value, opts = {}) {
-  const parts = [`${name}=${encodeURIComponent(value)}`];
-  if (opts.httpOnly) parts.push("HttpOnly");
-  if (opts.secure) parts.push("Secure");
-  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
-  if (opts.path) parts.push(`Path=${opts.path}`);
-  if (opts.maxAge) parts.push(`Max-Age=${opts.maxAge}`);
-  res.setHeader("Set-Cookie", parts.join("; "));
 }
 
 function shuffle(arr) {
@@ -73,15 +62,13 @@ function toSet(listStr) {
   );
 }
 
-// ====== إعدادات التفعيل ======
-const QUESTIONS_PER_ATTEMPT = 10;  // كم سؤال يظهر كل مرة
-const ALLOWED_WRONG = 2;           // سماحية خطأين
-
-// ====== Cooldown (محاولة واحدة/15 دقيقة فقط عند الرسوب) ======
-const cooldown = new Map(); // userId -> lastFailTimestamp
+// ===== Settings =====
+const QUESTIONS_PER_ATTEMPT = 10;
+const ALLOWED_WRONG = 2;
 const COOLDOWN_MS = 15 * 60 * 1000;
+const cooldown = new Map();
 
-// ====== بنك أسئلة (تقدر تزيد لاحقًا) ======
+// ===== Question Bank =====
 const QUESTION_BANK = [
   {
     id: "q1",
@@ -89,7 +76,6 @@ const QUESTION_BANK = [
     options: [
       { k: "a", text: "تقمص الشخصية وتمثيل الحياة الواقعية داخل اللعبة", correct: true },
       { k: "b", text: "اللعب بدون تقمص", correct: false },
-      { k: "c", text: "التحدث خارج المدينة عادي", correct: false },
     ],
   },
   {
@@ -98,196 +84,11 @@ const QUESTION_BANK = [
     options: [
       { k: "a", text: "استخدام المركبة كسلاح ودهس اللاعبين", correct: true },
       { k: "b", text: "صدم عرضي بسيط", correct: false },
-      { k: "c", text: "القيادة بسرعة عالية داخل المدينة دائمًا", correct: false },
-    ],
-  },
-  {
-    id: "q3",
-    title: "ماهو RDM؟",
-    options: [
-      { k: "a", text: "قتل اللاعبين بدون سبب/تهديد وبشكل عشوائي", correct: true },
-      { k: "b", text: "الدفاع عن النفس عند التهديد", correct: false },
-      { k: "c", text: "مطاردة شرطي داخل الرول بلاي", correct: false },
-    ],
-  },
-  {
-    id: "q4",
-    title: "متى يحق لك الصدم الاحترافي؟",
-    options: [
-      { k: "a", text: "بعد مرور 5 دقائق من المطاردة وأخذ الإذن من مركز العمليات", correct: true },
-      { k: "b", text: "مباشرة بعد بدء المطاردة", correct: false },
-      { k: "c", text: "بدون إذن بأي وقت", correct: false },
-    ],
-  },
-  {
-    id: "q5",
-    title: "إذا كنت برتبة رئيس رقباء يحق لك الاصطفاف العسكري؟",
-    options: [
-      { k: "a", text: "لا", correct: true },
-      { k: "b", text: "نعم", correct: false },
-    ],
-  },
-  {
-    id: "q6",
-    title: "هل يحق لك قطع بلاغ زميلك؟",
-    options: [
-      { k: "a", text: "لا", correct: true },
-      { k: "b", text: "نعم", correct: false },
-    ],
-  },
-  {
-    id: "q7",
-    title: "هل يحق لك صعود الجبل بسيارة سيدان أو رياضية؟",
-    options: [
-      { k: "a", text: "لا", correct: true },
-      { k: "b", text: "نعم", correct: false },
-    ],
-  },
-  {
-    id: "q8",
-    title: "هل يمنع التحدث خارج الرول بلاي في جميع الأحوال؟",
-    options: [
-      { k: "a", text: "نعم، ممنوع", correct: true },
-      { k: "b", text: "لا، عادي", correct: false },
-    ],
-  },
-  {
-    id: "q9",
-    title: "هل يجب أن يكون لديك ميكروفون يعمل ومضبوط بشكل صحيح؟",
-    options: [
-      { k: "a", text: "نعم", correct: true },
-      { k: "b", text: "لا", correct: false },
-    ],
-  },
-  {
-    id: "q10",
-    title: "هل تعتبر المعلومة من خارج المدينة (يوتيوب/بث/ديسكورد) مخالفة للرول بلاي؟",
-    options: [
-      { k: "a", text: "نعم", correct: true },
-      { k: "b", text: "لا", correct: false },
-    ],
-  },
-  {
-    id: "q11",
-    title: "إذا قبضت عليك الشرطة وطلب منك تسديد المخالفات، هل يجب عليك تسديدها؟",
-    options: [
-      { k: "a", text: "نعم", correct: true },
-      { k: "b", text: "لا", correct: false },
-    ],
-  },
-  {
-    id: "q12",
-    title: "هل يجب الالتزام بقوانين العسكر وعدم القيادة بتهور أو بسرعات غير واقعية؟",
-    options: [
-      { k: "a", text: "نعم", correct: true },
-      { k: "b", text: "لا", correct: false },
     ],
   },
 ];
 
-// ====== Discord OAuth ======
-app.get("/auth/login", (req, res) => {
-  const redirectUri = `${BASE_URL}/auth/callback`;
-  const url =
-    "https://discord.com/api/oauth2/authorize" +
-    `?client_id=${encodeURIComponent(CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent("identify")}`;
-  res.redirect(url);
-});
-
-app.get("/auth/callback", async (req, res) => {
-  try {
-    const code = req.query.code;
-    if (!code) return res.status(400).send("Missing code");
-
-    const redirectUri = `${BASE_URL}/auth/callback`;
-
-    const body = new URLSearchParams();
-    body.set("client_id", CLIENT_ID);
-    body.set("client_secret", CLIENT_SECRET);
-    body.set("grant_type", "authorization_code");
-    body.set("code", code);
-    body.set("redirect_uri", redirectUri);
-
-    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-
-    if (!tokenRes.ok) {
-      const t = await tokenRes.text();
-      return res.status(400).send("OAuth token error: " + t);
-    }
-
-    const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
-
-    const meRes = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!meRes.ok) {
-      const t = await meRes.text();
-      return res.status(400).send("Fetch user error: " + t);
-    }
-
-    const me = await meRes.json();
-
-    // خزّن uid فقط
-    setCookie(res, "uid", me.id, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "Lax",
-      path: "/",
-      maxAge: 60 * 60 * 24, // يوم
-    });
-
-    res.redirect("/");
-  } catch (e) {
-    console.error(e);
-    res.status(500).send("Server error in callback");
-  }
-});
-
-app.get("/auth/logout", (req, res) => {
-  setCookie(res, "uid", "", { path: "/", maxAge: 0 });
-  res.redirect("/");
-});
-
-// ====== Serve page ======
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// ====== API: get randomized questions ======
-app.get("/api/questions", (req, res) => {
-  const cookies = parseCookies(req);
-  const uid = cookies.uid || null;
-
-  const selected = shuffle(QUESTION_BANK)
-    .slice(0, QUESTIONS_PER_ATTEMPT)
-    .map((q) => {
-      const options = shuffle(q.options).map((o) => ({ k: o.k, text: o.text }));
-      return { id: q.id, title: q.title, options };
-    });
-
-  const left =
-    uid && cooldown.has(uid)
-      ? Math.max(0, COOLDOWN_MS - (Date.now() - cooldown.get(uid)))
-      : 0;
-
-  res.json({
-    loggedIn: !!uid,
-    questions: selected,
-    cooldown: left,
-    allowedWrong: ALLOWED_WRONG,
-  });
-});
-
-// ====== Discord REST ======
+// ===== Discord REST =====
 async function discordRequest(method, url, body) {
   const res = await fetch("https://discord.com/api/v10" + url, {
     method,
@@ -297,140 +98,111 @@ async function discordRequest(method, url, body) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+
   if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    throw new Error(`${method} ${url} failed: ${res.status} ${t}`);
+    const t = await res.text();
+    throw new Error(`${res.status} ${t}`);
   }
+
   return res.status === 204 ? null : res.json();
 }
 
-// ====== Submit ======
+// ===== Routes =====
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/api/questions", (req, res) => {
+  const cookies = parseCookies(req);
+  const uid = cookies.uid;
+
+  const questions = shuffle(QUESTION_BANK)
+    .slice(0, QUESTIONS_PER_ATTEMPT)
+    .map((q) => ({
+      id: q.id,
+      title: q.title,
+      options: shuffle(q.options).map((o) => ({ k: o.k, text: o.text })),
+    }));
+
+  const left =
+    uid && cooldown.has(uid)
+      ? Math.max(0, COOLDOWN_MS - (Date.now() - cooldown.get(uid)))
+      : 0;
+
+  res.json({
+    questions,
+    cooldown: left,
+    allowedWrong: ALLOWED_WRONG,
+  });
+});
+
 app.post("/submit", async (req, res) => {
   try {
     const cookies = parseCookies(req);
     const uid = cookies.uid;
 
     if (!uid) {
-      return res.status(401).json({ ok: false, message: "لازم تسجل دخول ديسكورد أول." });
+      return res.status(401).json({ ok: false, message: "سجّل دخول ديسكورد أولًا" });
     }
 
-    // cooldown فقط لو سبق ورسب
     const lastFail = cooldown.get(uid) || 0;
-    const now = Date.now();
-    if (now - lastFail < COOLDOWN_MS) {
-      const left = Math.ceil((COOLDOWN_MS - (now - lastFail)) / 1000);
-      return res.status(429).json({
-        ok: false,
-        message: `محاولة واحدة فقط كل 15 دقيقة عند الرسوب. باقي ${left} ثانية.`,
-      });
+    if (Date.now() - lastFail < COOLDOWN_MS) {
+      return res.json({ ok: false, message: "انتظر 15 دقيقة قبل المحاولة" });
     }
 
     const { answers, agree } = req.body;
-
     if (String(agree) !== "true") {
-      return res.json({ ok: false, message: "لازم توافق على الشروط." });
+      return res.json({ ok: false, message: "يجب الموافقة على الشروط" });
     }
 
-    // answers: array [{id, k}]
-    let parsed = [];
-    try {
-      parsed = Array.isArray(answers) ? answers : JSON.parse(answers);
-      if (!Array.isArray(parsed)) throw new Error("bad answers");
-    } catch {
-      return res.status(400).json({ ok: false, message: "إجابات غير صالحة." });
-    }
-
-    const bankMap = new Map(QUESTION_BANK.map((q) => [q.id, q]));
-    let correctCount = 0;
+    const parsed = Array.isArray(answers) ? answers : JSON.parse(answers);
+    let wrong = 0;
 
     for (const a of parsed) {
-      const q = bankMap.get(a.id);
-      if (!q) continue;
-      const opt = q.options.find((o) => o.k === a.k);
-      if (opt && opt.correct) correctCount++;
+      const q = QUESTION_BANK.find((x) => x.id === a.id);
+      const opt = q?.options.find((o) => o.k === a.k);
+      if (!opt?.correct) wrong++;
     }
 
-    const required = parsed.length;
-    const wrongCount = required - correctCount;
+    const passed = wrong <= ALLOWED_WRONG;
 
-    // ✅ سماحية خطأين
-    const passed = required > 0 && wrongCount <= ALLOWED_WRONG;
-
-    // جلب العضو (يتأكد أنه داخل السيرفر)
-    const member = await discordRequest("GET", `/guilds/${GUILD_ID}/members/${uid}`);
-
-    const keep = toSet(KEEP_ROLE_IDS);
-    keep.add(APPROVED_ROLE_ID);
-    keep.add(UNAPPROVED_ROLE_ID);
-    if (EXTRA_ROLE_ID) keep.add(EXTRA_ROLE_ID);
-
-    // ====== نجاح ======
     if (passed) {
-      try {
-        await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`);
-        await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`).catch(() => null);
+      await discordRequest(
+        "PUT",
+        `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`
+      );
+      await discordRequest(
+        "DELETE",
+        `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`
+      ).catch(() => null);
 
-        // احذف باقي الرولات (إلا keep)
-        const rolesToRemove = (member.roles || []).filter((rid) => !keep.has(rid));
-        for (const rid of rolesToRemove) {
-          await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${rid}`).catch(() => null);
-        }
-
-        // رول إضافي (اختياري)
-        if (EXTRA_ROLE_ID) {
-          await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${EXTRA_ROLE_ID}`).catch(() => null);
-        }
-
-        // رسالة “سامحناك”
-        let msg = "✅ تم التفعيل بنجاح وتم إعطاؤك رتبة (موافق على الشروط).";
-        if (wrongCount > 0) {
-          msg = `✅ تم التفعيل. عندك ${wrongCount} خطأ وسامحناك (السماحية ${ALLOWED_WRONG}).`;
-        }
-
-        return res.json({ ok: true, passed: true, message: msg });
-      } catch (e) {
-        console.error("ROLE_ASSIGN_ERROR:", e?.message || e);
-        return res.status(500).json({
-          ok: false,
-          message:
-            "✅ إجاباتك صحيحة لكن البوت ما قدر يعطي الرتبة. ارفع رتبة البوت فوق (موافق على الشروط) وفعل Manage Roles.",
-        });
-      }
+      return res.json({
+        ok: true,
+        passed: true,
+        message:
+          wrong > 0
+            ? `تم التفعيل ✔️ عندك ${wrong} خطأ وسامحناك`
+            : "تم التفعيل ✔️",
+      });
     }
 
-    // ====== رسوب ======
-    cooldown.set(uid, now); // ✅ محاولة فقط عند الرسوب
-
-    await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`).catch(() => null);
-    await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`).catch(() => null);
-
+    cooldown.set(uid, Date.now());
     return res.json({
-      ok: true,
+      ok: false,
       passed: false,
-      message: `❌ عندك ${wrongCount} أخطاء. المسموح ${ALLOWED_WRONG} فقط. حاول بعد 15 دقيقة.`,
+      message: `رسوب ❌ عندك ${wrong} أخطاء`,
     });
   } catch (e) {
-    console.error("SUBMIT_ERROR:", e?.message || e);
-
-    // لو المستخدم مو داخل السيرفر
-    if (String(e?.message || "").includes("GET /guilds") && String(e?.message || "").includes("404")) {
-      return res.status(400).json({
-        ok: false,
-        message: "❌ لازم تكون داخل السيرفر قبل التفعيل. ادخل السيرفر ثم جرّب.",
-      });
-    }
-
-    // صلاحيات/رتب
-    if (String(e?.message || "").includes("403")) {
-      return res.status(400).json({
-        ok: false,
-        message: "❌ البوت ما عنده صلاحية كافية. تأكد من Manage Roles وأن رتبة البوت فوق الرتب المطلوبة.",
-      });
-    }
-
+    console.error("SUBMIT_ERROR:", e.message);
     return res.status(500).json({
       ok: false,
-      message: `❌ خطأ بالسيرفر: ${e?.message || "غير معروف"}`,
+      message: "خطأ في السيرفر",
     });
   }
+});
+
+// ===== Start =====
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Server running on ${PORT}`);
 });

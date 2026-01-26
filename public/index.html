@@ -2,217 +2,191 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>التفعيل الإلكتروني</title>
   <style>
-    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Tahoma; background:#0b1220; color:#e7eefc;}
-    .wrap{max-width:900px;margin:30px auto;padding:20px}
-    .card{background:rgba(12,18,34,.7); border:1px solid rgba(255,255,255,.08); border-radius:18px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.35)}
-    h1{margin:0 0 10px;font-size:28px}
-    .top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-    .btn{cursor:pointer;border:0;border-radius:12px;padding:12px 14px;font-weight:700}
-    .btn-primary{background:#22c55e;color:#04140a}
-    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.15);color:#e7eefc}
-    .muted{opacity:.85;font-size:14px}
-    .pill{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);font-size:13px}
-    .q{margin-top:14px;border-radius:16px;border:1px solid rgba(255,255,255,.10);padding:14px;background:rgba(255,255,255,.03)}
-    .q h3{margin:0 0 10px;font-size:18px}
-    .opt{display:flex;gap:10px;align-items:flex-start;margin:8px 0}
-    input[type="radio"]{transform:scale(1.1);margin-top:4px}
-    .agree{margin-top:14px;display:flex;gap:10px;align-items:center}
-    .bar{margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .msg{margin-top:14px;padding:12px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
-    .msg.ok{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.10)}
-    .msg.bad{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.10)}
-    .warn{border-color:rgba(234,179,8,.35);background:rgba(234,179,8,.10)}
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:18px}
-    .modal{max-width:520px;width:100%;background:#0f1a2f;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px}
-    .modal h2{margin:0 0 10px}
-    .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+    body{margin:0;font-family:system-ui;background:#0b1220;color:#e8eefc}
+    .wrap{max-width:900px;margin:30px auto;padding:16px}
+    .card{background:#0f1a2e;border:1px solid #22355e;border-radius:14px;padding:16px;margin-bottom:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+    .btn{cursor:pointer;border:0;border-radius:12px;padding:12px 16px;font-weight:700}
+    .btn.primary{background:#22c55e;color:#06130b}
+    .btn.gray{background:#334155;color:#fff}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .qtitle{font-weight:800;margin:0 0 10px 0}
+    .opt{display:flex;gap:10px;align-items:center;margin:8px 0}
+    .banner{padding:10px 12px;border-radius:12px;margin:10px 0}
+    .err{background:#3b0d0d;border:1px solid #7f1d1d}
+    .ok{background:#05250f;border:1px solid #14532d}
+    .muted{opacity:.75}
+    .hr{height:1px;background:#22355e;margin:14px 0}
+    a{color:#93c5fd}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <div class="top">
+      <div class="row">
         <div>
-          <h1>📋 التفعيل الإلكتروني</h1>
-          <div class="muted">اختبار سريع — سماحية: <b id="allowedWrong">2</b> أخطاء. محاولة كل 15 دقيقة فقط عند الرسوب.</div>
+          <div style="font-size:22px;font-weight:900">التفعيل الإلكتروني 📄</div>
+          <div class="muted">اختر الإجابات الصحيحة ثم اضغط إرسال.</div>
         </div>
-        <div class="bar">
-          <span class="pill" id="cooldownPill" style="display:none;">⏳ <span id="cooldownText"></span></span>
-          <button class="btn btn-ghost" id="btnLogout" style="display:none;">تسجيل خروج</button>
-          <button class="btn btn-primary" id="btnLogin">تسجيل دخول ديسكورد</button>
-        </div>
+        <div id="authBox"></div>
       </div>
 
-      <div id="content" style="margin-top:14px"></div>
-
-      <div class="agree">
-        <input type="checkbox" id="agree" />
-        <label for="agree">أوافق على الشروط والقوانين (إلزامي)</label>
-      </div>
-
-      <div class="bar">
-        <button class="btn btn-primary" id="btnSubmit">إرسال</button>
-        <button class="btn btn-ghost" id="btnReload">تغيير الأسئلة</button>
-      </div>
-
-      <div id="messageBox" class="msg" style="display:none"></div>
+      <div id="cooldownBox" class="banner err" style="display:none"></div>
+      <div id="msgBox" class="banner" style="display:none"></div>
     </div>
-  </div>
 
-  <div class="overlay" id="overlay">
-    <div class="modal">
-      <h2>تأكيد الإرسال</h2>
-      <div class="muted">هل أنت متأكد من إرسال إجاباتك الآن؟</div>
-      <div class="actions">
-        <button class="btn btn-ghost" id="btnCancel">إلغاء</button>
-        <button class="btn btn-primary" id="btnConfirm">تأكيد</button>
+    <div id="questions"></div>
+
+    <div class="card">
+      <div style="font-weight:900;margin-bottom:10px">الموافقة على الشروط</div>
+      <label class="opt">
+        <input type="checkbox" id="agree" />
+        <span>موافق على الشروط</span>
+      </label>
+      <div class="hr"></div>
+      <button class="btn primary" id="submitBtn" disabled>إرسال</button>
+      <div class="muted" style="margin-top:8px">
+        ملاحظة: محاولة جديدة بعد الرسوب فقط كل 15 دقيقة. السماحية: <span id="allowedWrong">2</span> أخطاء.
       </div>
     </div>
   </div>
 
 <script>
-const el = (id)=>document.getElementById(id);
-const content = el("content");
-const msgBox = el("messageBox");
-const overlay = el("overlay");
 let state = { loggedIn:false, questions:[], cooldown:0, allowedWrong:2 };
-let cooldownTimer = null;
+let chosen = new Map(); // qid -> optionKey
 
-function showMsg(text, type="ok"){
-  msgBox.style.display="block";
-  msgBox.className = "msg " + (type||"");
-  msgBox.textContent = text;
+function showMsg(text, ok=false){
+  const box = document.getElementById("msgBox");
+  box.style.display = "block";
+  box.className = "banner " + (ok ? "ok" : "err");
+  box.textContent = text;
 }
 
-function hideMsg(){ msgBox.style.display="none"; }
-
-function fmtLeft(ms){
-  const s = Math.ceil(ms/1000);
-  const m = Math.floor(s/60);
-  const r = s%60;
-  return `${m} دقيقة و ${r} ثانية`;
+function hideMsg(){
+  const box = document.getElementById("msgBox");
+  box.style.display = "none";
 }
 
-function render(){
-  content.innerHTML = "";
-  hideMsg();
+function setCooldown(ms){
+  const box = document.getElementById("cooldownBox");
+  if(!ms || ms<=0){ box.style.display="none"; return; }
+  box.style.display="block";
+  const end = Date.now() + ms;
+  const t = setInterval(()=>{
+    const left = Math.max(0, end - Date.now());
+    const m = Math.floor(left/60000);
+    const s = Math.floor((left%60000)/1000);
+    box.textContent = `⏳ لديك محاولة واحدة كل 15 دقيقة عند الرسوب. الباقي: ${m} دقيقة و ${s} ثانية`;
+    if(left<=0){ clearInterval(t); box.style.display="none"; }
+  }, 250);
+}
 
-  el("allowedWrong").textContent = state.allowedWrong;
+function updateSubmitEnabled(){
+  const agree = document.getElementById("agree").checked;
+  const allAnswered = state.questions.length>0 && chosen.size === state.questions.length;
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = !(agree && allAnswered && (!state.cooldown || state.cooldown<=0));
+}
 
-  el("btnLogin").style.display = state.loggedIn ? "none" : "inline-block";
-  el("btnLogout").style.display = state.loggedIn ? "inline-block" : "none";
-
-  // cooldown
-  if(state.cooldown > 0){
-    el("cooldownPill").style.display = "inline-flex";
-    el("cooldownText").textContent = `باقي: ${fmtLeft(state.cooldown)}`;
-    el("btnSubmit").disabled = true;
-    el("btnSubmit").style.opacity = .6;
+function renderAuth(){
+  const box = document.getElementById("authBox");
+  if(state.loggedIn){
+    box.innerHTML = `<button class="btn gray" onclick="location.href='/auth/logout'">تسجيل خروج</button>`;
   }else{
-    el("cooldownPill").style.display = "none";
-    el("btnSubmit").disabled = false;
-    el("btnSubmit").style.opacity = 1;
+    box.innerHTML = `<button class="btn gray" onclick="location.href='/auth/login'">تسجيل دخول ديسكورد</button>`;
   }
+}
 
-  if(!state.loggedIn){
-    showMsg("سجّل دخول ديسكورد ثم ابدأ الاختبار.", "warn");
-  }
+function renderQuestions(){
+  const root = document.getElementById("questions");
+  root.innerHTML = "";
+  chosen.clear();
 
   state.questions.forEach((q, idx)=>{
-    const box = document.createElement("div");
-    box.className="q";
-    box.innerHTML = `<h3>${idx+1}- ${q.title}</h3>`;
-    q.options.forEach(opt=>{
+    const card = document.createElement("div");
+    card.className="card";
+    card.innerHTML = `
+      <div class="qtitle">${idx+1}- ${q.title}</div>
+      <div id="opts-${q.id}"></div>
+    `;
+    const opts = card.querySelector(`#opts-${q.id}`);
+    q.options.forEach((o)=>{
+      const id = `${q.id}-${o.k}`;
       const row = document.createElement("label");
       row.className="opt";
       row.innerHTML = `
-        <input type="radio" name="${q.id}" value="${opt.k}">
-        <div>${opt.text}</div>
+        <input type="radio" name="${q.id}" id="${id}" value="${o.k}">
+        <span>${o.text}</span>
       `;
-      box.appendChild(row);
+      row.querySelector("input").addEventListener("change",(e)=>{
+        chosen.set(q.id, e.target.value);
+        updateSubmitEnabled();
+      });
+      opts.appendChild(row);
     });
-    content.appendChild(box);
+    root.appendChild(card);
   });
+
+  updateSubmitEnabled();
 }
 
-async function loadQuestions(){
+async function load(){
+  hideMsg();
   const res = await fetch("/api/questions");
   const data = await res.json();
   state = data;
-
-  // مؤقت عد تنازلي
-  if(cooldownTimer) clearInterval(cooldownTimer);
-  cooldownTimer = setInterval(()=>{
-    if(state.cooldown > 0){
-      state.cooldown -= 1000;
-      if(state.cooldown < 0) state.cooldown = 0;
-      render();
-    }
-  }, 1000);
-
-  render();
+  document.getElementById("allowedWrong").textContent = data.allowedWrong ?? 2;
+  renderAuth();
+  setCooldown(data.cooldown || 0);
+  renderQuestions();
+  updateSubmitEnabled();
 }
 
-function collectAnswers(){
-  const answers = [];
-  for(const q of state.questions){
-    const picked = document.querySelector(`input[name="${q.id}"]:checked`);
-    if(!picked) return { ok:false, message:`لازم تجاوب على: ${q.title}` };
-    answers.push({ id:q.id, k:picked.value });
-  }
-  return { ok:true, answers };
-}
+document.getElementById("agree").addEventListener("change", updateSubmitEnabled);
 
-el("btnLogin").onclick = ()=>location.href="/auth/login";
-el("btnLogout").onclick = ()=>location.href="/auth/logout";
-el("btnReload").onclick = ()=>loadQuestions();
-
-el("btnSubmit").onclick = ()=>{
+document.getElementById("submitBtn").addEventListener("click", async ()=>{
   hideMsg();
-  const a = collectAnswers();
-  if(!a.ok) return showMsg(a.message, "bad");
-  if(!el("agree").checked) return showMsg("لازم توافق على الشروط.", "bad");
-  overlay.style.display="flex";
-};
 
-el("btnCancel").onclick = ()=> overlay.style.display="none";
-el("btnConfirm").onclick = async ()=>{
-  overlay.style.display="none";
-  const a = collectAnswers();
-  if(!a.ok) return showMsg(a.message, "bad");
+  if(!state.loggedIn){
+    showMsg("لازم تسجل دخول ديسكورد أول.");
+    return;
+  }
+
+  // تأكيد: لازم جاوب الكل
+  if(chosen.size !== state.questions.length){
+    showMsg("لازم تجاوب على كل الأسئلة قبل الإرسال.");
+    return;
+  }
 
   const payload = {
     agree: true,
-    answers: a.answers
+    answers: state.questions.map(q => ({ id:q.id, k: chosen.get(q.id) }))
   };
 
   const res = await fetch("/submit", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 
-  let data = null;
-  try{ data = await res.json(); }catch{ data = { ok:false, message:"Server error" }; }
+  const out = await res.json().catch(()=>({ok:false,message:"Server error"}));
 
   if(!res.ok){
-    return showMsg(data.message || "خطأ", "bad");
+    showMsg(out.message || "Server error");
+    return;
   }
 
-  if(data.passed){
-    showMsg(data.message || "تم التفعيل", "ok");
-  }else{
-    showMsg(data.message || "لم يتم التفعيل", "bad");
-  }
+  showMsg(out.message || "تم", !!out.passed);
 
-  // تحديث الأسئلة/الكولداون بعد الإرسال
-  await loadQuestions();
-};
+  // لو رسب => نعيد تحميل عشان يظهر كولداون
+  // ولو نجح => نعيد تحميل لعرض حالته
+  await load();
+});
 
-loadQuestions();
+load();
 </script>
 </body>
 </html>

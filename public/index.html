@@ -60,7 +60,7 @@
 
     <div id="result" class="msg"></div>
     <div class="line"></div>
-    <div class="muted">ملاحظة: الأسئلة والخيارات تتغير تلقائيًا كل مرة.</div>
+    <div class="muted" id="hint"></div>
   </div>
 
 <script>
@@ -71,6 +71,7 @@
   const resultEl = document.getElementById("result");
   const cooldownBox = document.getElementById("cooldownBox");
   const submitBtn = document.getElementById("submitBtn");
+  const hintEl = document.getElementById("hint");
 
   function fmt(sec){
     sec = Math.max(0, sec|0);
@@ -88,6 +89,8 @@
     const r = await fetch("/api/questions");
     const data = await r.json();
 
+    hintEl.textContent = `ملاحظة: الأسئلة والخيارات تتغير كل مرة. السماحية: ${data.allowedWrong} أخطاء.`;
+
     if (!data.loggedIn){
       statusEl.textContent = "لازم تسجل دخول ديسكورد قبل التفعيل.";
       loginBtn.style.display = "inline-block";
@@ -102,16 +105,16 @@
     logoutBtn.onclick = () => location.href = "/auth/logout";
     submitBtn.disabled = false;
 
-    // عرض التبريد
     if (data.cooldown && data.cooldown > 0){
       cooldownBox.className = "msg warn";
       cooldownBox.style.display = "block";
-      cooldownBox.textContent = `⏳ لديك محاولة واحدة كل 15 دقيقة. باقي: ${fmt(Math.ceil(data.cooldown/1000))}`;
+      cooldownBox.textContent = `⏳ لديك محاولة واحدة كل 15 دقيقة عند الرسوب فقط. باقي: ${fmt(Math.ceil(data.cooldown/1000))}`;
+      // نقدر نخلي الإرسال مقفل وقت الانتظار
+      submitBtn.disabled = true;
     }
 
     statusEl.textContent = "اختر الإجابة الصحيحة لكل سؤال.";
 
-    // بناء الأسئلة
     data.questions.forEach((q, idx) => {
       const card = document.createElement("div");
       card.className = "card";
@@ -140,7 +143,6 @@
     e.preventDefault();
     resultEl.style.display = "none";
 
-    // جمع الإجابات
     const answers = [];
     document.querySelectorAll(".card[data-qid]").forEach(card => {
       const qid = card.dataset.qid;
@@ -164,15 +166,9 @@
       const out = await res.json();
 
       resultEl.style.display = "block";
-      if (!out.ok){
-        resultEl.className = "msg bad";
-        resultEl.textContent = out.message || "Server error";
-      } else {
-        resultEl.className = out.passed ? "msg ok" : "msg bad";
-        resultEl.textContent = out.message || (out.passed ? "تم" : "لم يتم");
-      }
+      resultEl.className = out.passed ? "msg ok" : "msg bad";
+      resultEl.textContent = out.message || "تم";
 
-      // بعد الإرسال: أعد تحميل الأسئلة ليصير تلخبط جديد + تحديث التبريد
       await loadQuestions();
     }catch(err){
       resultEl.style.display = "block";

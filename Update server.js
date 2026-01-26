@@ -296,6 +296,58 @@ client.on("interactionCreate", async (interaction) => {
     } catch {}
   }
 });
+// =======================
+// 🪖 Military Codes System
+// =======================
+
+const fs = require("fs");
+const CODES_FILE = "./codes.json";
+
+const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+const START_NUMBER = Number(process.env.START_NUMBER || 1);
+
+// تحميل آخر رقم
+let lastNumber = START_NUMBER - 1;
+if (fs.existsSync(CODES_FILE)) {
+  try {
+    const data = JSON.parse(fs.readFileSync(CODES_FILE, "utf8"));
+    lastNumber = data.lastNumber ?? lastNumber;
+  } catch {}
+}
+
+function saveLastNumber() {
+  fs.writeFileSync(CODES_FILE, JSON.stringify({ lastNumber }, null, 2));
+}
+
+// أمر /كود
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "كود") return;
+
+  const fullName = interaction.options.getString("الاسم", true);
+  const userId = interaction.user.id;
+
+  lastNumber++;
+  saveLastNumber();
+
+  const code = `جيم-${lastNumber}`;
+
+  // رد خاص للشخص
+  await interaction.reply({
+    ephemeral: true,
+    content: `✅ تم إصدار كودك بنجاح\n\n**${fullName}-${code}**`,
+  });
+
+  // إرسال لوق
+  try {
+    const ch = await client.channels.fetch(LOG_CHANNEL_ID);
+    if (ch) {
+      await ch.send(`🪖 **${code}** تم أخذه بواسطة **${fullName}** <@${userId}>`);
+    }
+  } catch (e) {
+    console.error("LOG_CHANNEL_ERROR:", e.message);
+  }
+});
 
 client.login(BOT_TOKEN);
 

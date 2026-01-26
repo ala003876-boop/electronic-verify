@@ -64,7 +64,24 @@ function shuffle(arr) {
   return a;
 }
 
-// ====== سؤال بنك (كثير + تتبدل) ======
+function toSet(listStr) {
+  return new Set(
+    (listStr || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+}
+
+// ====== إعدادات التفعيل ======
+const QUESTIONS_PER_ATTEMPT = 10;  // كم سؤال يظهر كل مرة
+const ALLOWED_WRONG = 2;           // سماحية خطأين
+
+// ====== Cooldown (محاولة واحدة/15 دقيقة فقط عند الرسوب) ======
+const cooldown = new Map(); // userId -> lastFailTimestamp
+const COOLDOWN_MS = 15 * 60 * 1000;
+
+// ====== بنك أسئلة (تقدر تزيد لاحقًا) ======
 const QUESTION_BANK = [
   {
     id: "q1",
@@ -126,13 +143,12 @@ const QUESTION_BANK = [
       { k: "b", text: "نعم", correct: false },
     ],
   },
-  // أسئلة إضافية من البنود 9-14 (تزيد عدد الأسئلة وتتلخبط)
   {
     id: "q8",
-    title: "هل يجب الالتزام بقوانين العسكر وعدم القيادة بتهور أو بسرعات غير واقعية؟",
+    title: "هل يمنع التحدث خارج الرول بلاي في جميع الأحوال؟",
     options: [
-      { k: "a", text: "نعم", correct: true },
-      { k: "b", text: "لا", correct: false },
+      { k: "a", text: "نعم، ممنوع", correct: true },
+      { k: "b", text: "لا، عادي", correct: false },
     ],
   },
   {
@@ -145,14 +161,6 @@ const QUESTION_BANK = [
   },
   {
     id: "q10",
-    title: "هل يمنع التحدث خارج الرول بلاي في جميع الأحوال؟",
-    options: [
-      { k: "a", text: "نعم، ممنوع", correct: true },
-      { k: "b", text: "لا، عادي", correct: false },
-    ],
-  },
-  {
-    id: "q11",
     title: "هل تعتبر المعلومة من خارج المدينة (يوتيوب/بث/ديسكورد) مخالفة للرول بلاي؟",
     options: [
       { k: "a", text: "نعم", correct: true },
@@ -160,21 +168,22 @@ const QUESTION_BANK = [
     ],
   },
   {
-    id: "q12",
+    id: "q11",
     title: "إذا قبضت عليك الشرطة وطلب منك تسديد المخالفات، هل يجب عليك تسديدها؟",
     options: [
       { k: "a", text: "نعم", correct: true },
       { k: "b", text: "لا", correct: false },
     ],
   },
+  {
+    id: "q12",
+    title: "هل يجب الالتزام بقوانين العسكر وعدم القيادة بتهور أو بسرعات غير واقعية؟",
+    options: [
+      { k: "a", text: "نعم", correct: true },
+      { k: "b", text: "لا", correct: false },
+    ],
+  },
 ];
-
-// عدد الأسئلة اللي نعرضها كل مرة (يزيد ويغيّر)
-const QUESTIONS_PER_ATTEMPT = 10;
-
-// ====== Cooldown (محاولة واحدة/15 دقيقة) ======
-const cooldown = new Map(); // userId -> lastTimestamp
-const COOLDOWN_MS = 15 * 60 * 1000;
 
 // ====== Discord OAuth ======
 app.get("/auth/login", (req, res) => {
@@ -227,7 +236,7 @@ app.get("/auth/callback", async (req, res) => {
 
     const me = await meRes.json();
 
-    // خزّن user id في cookie (بدون أي توكن)
+    // خزّن uid فقط
     setCookie(res, "uid", me.id, {
       httpOnly: true,
       secure: true,
@@ -236,7 +245,7 @@ app.get("/auth/callback", async (req, res) => {
       maxAge: 60 * 60 * 24, // يوم
     });
 
-    res.redirect("/"); // يرجع للصفحة
+    res.redirect("/");
   } catch (e) {
     console.error(e);
     res.status(500).send("Server error in callback");
@@ -253,24 +262,32 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ====== API: get randomized questions (بدون الإجابة الصحيحة) ======
+// ====== API: get randomized questions ======
 app.get("/api/questions", (req, res) => {
   const cookies = parseCookies(req);
   const uid = cookies.uid || null;
 
-  const selected = shuffle(QUESTION_BANK).slice(0, QUESTIONS_PER_ATTEMPT).map((q) => {
-    const options = shuffle(q.options).map((o) => ({ k: o.k, text: o.text })); // بدون correct
-    return { id: q.id, title: q.title, options };
-  });
+  const selected = shuffle(QUESTION_BANK)
+    .slice(0, QUESTIONS_PER_ATTEMPT)
+    .map((q) => {
+      const options = shuffle(q.options).map((o) => ({ k: o.k, text: o.text }));
+      return { id: q.id, title: q.title, options };
+    });
+
+  const left =
+    uid && cooldown.has(uid)
+      ? Math.max(0, COOLDOWN_MS - (Date.now() - cooldown.get(uid)))
+      : 0;
 
   res.json({
     loggedIn: !!uid,
     questions: selected,
-    cooldown: uid && cooldown.has(uid) ? Math.max(0, COOLDOWN_MS - (Date.now() - cooldown.get(uid))) : 0,
+    cooldown: left,
+    allowedWrong: ALLOWED_WRONG,
   });
 });
 
-// ====== Discord REST helpers ======
+// ====== Discord REST ======
 async function discordRequest(method, url, body) {
   const res = await fetch("https://discord.com/api/v10" + url, {
     method,
@@ -287,15 +304,6 @@ async function discordRequest(method, url, body) {
   return res.status === 204 ? null : res.json();
 }
 
-function toSet(listStr) {
-  return new Set(
-    (listStr || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-  );
-}
-
 // ====== Submit ======
 app.post("/submit", async (req, res) => {
   try {
@@ -306,20 +314,19 @@ app.post("/submit", async (req, res) => {
       return res.status(401).json({ ok: false, message: "لازم تسجل دخول ديسكورد أول." });
     }
 
-    // cooldown check
-    const last = cooldown.get(uid) || 0;
+    // cooldown فقط لو سبق ورسب
+    const lastFail = cooldown.get(uid) || 0;
     const now = Date.now();
-    if (now - last < COOLDOWN_MS) {
-      const left = Math.ceil((COOLDOWN_MS - (now - last)) / 1000);
+    if (now - lastFail < COOLDOWN_MS) {
+      const left = Math.ceil((COOLDOWN_MS - (now - lastFail)) / 1000);
       return res.status(429).json({
         ok: false,
-        message: `محاولة واحدة فقط كل 15 دقيقة. باقي ${left} ثانية.`,
+        message: `محاولة واحدة فقط كل 15 دقيقة عند الرسوب. باقي ${left} ثانية.`,
       });
     }
 
     const { answers, agree } = req.body;
 
-    // تأكيد الشروط
     if (String(agree) !== "true") {
       return res.json({ ok: false, message: "لازم توافق على الشروط." });
     }
@@ -327,13 +334,12 @@ app.post("/submit", async (req, res) => {
     // answers: array [{id, k}]
     let parsed = [];
     try {
-      parsed = typeof answers === "string" ? JSON.parse(answers) : answers;
+      parsed = Array.isArray(answers) ? answers : JSON.parse(answers);
       if (!Array.isArray(parsed)) throw new Error("bad answers");
     } catch {
       return res.status(400).json({ ok: false, message: "إجابات غير صالحة." });
     }
 
-    // تحقق الإجابات (لازم كلها صح)
     const bankMap = new Map(QUESTION_BANK.map((q) => [q.id, q]));
     let correctCount = 0;
 
@@ -344,54 +350,63 @@ app.post("/submit", async (req, res) => {
       if (opt && opt.correct) correctCount++;
     }
 
-    const required = parsed.length; // لازم كل اللي انعرض اختاره صح
-    const passed = correctCount === required && required > 0;
+    const required = parsed.length;
+    const wrongCount = required - correctCount;
 
-    // سجل المحاولة (حتى لو رسب)
-    cooldown.set(uid, now);
+    // ✅ سماحية خطأين
+    const passed = required > 0 && wrongCount <= ALLOWED_WRONG;
 
-    // جلب العضو من السيرفر
+    // جلب العضو
     const member = await discordRequest("GET", `/guilds/${GUILD_ID}/members/${uid}`);
 
     const keep = toSet(KEEP_ROLE_IDS);
-    // دائمًا نُبقي:
     keep.add(APPROVED_ROLE_ID);
     keep.add(UNAPPROVED_ROLE_ID);
     if (EXTRA_ROLE_ID) keep.add(EXTRA_ROLE_ID);
 
-    // لو نجح: أعطه موافق + شيل غير موافق + احذف باقي الرولات (إلا keep)
+    // ====== نجاح ======
     if (passed) {
-      // add approved
-      await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`);
-      // remove unapproved
-      await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`);
+      try {
+        await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`);
+        await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`).catch(() => null);
 
-      // remove other roles
-      const rolesToRemove = (member.roles || []).filter((rid) => !keep.has(rid));
-      for (const rid of rolesToRemove) {
-        await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${rid}`);
+        // احذف باقي الرولات (إلا keep)
+        const rolesToRemove = (member.roles || []).filter((rid) => !keep.has(rid));
+        for (const rid of rolesToRemove) {
+          await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${rid}`).catch(() => null);
+        }
+
+        // رول إضافي (اختياري)
+        if (EXTRA_ROLE_ID) {
+          await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${EXTRA_ROLE_ID}`).catch(() => null);
+        }
+
+        // رسالة “سامحناك”
+        let msg = "✅ تم التفعيل بنجاح وتم إعطاؤك رتبة (موافق على الشروط).";
+        if (wrongCount > 0) {
+          msg = `✅ تم التفعيل. عندك ${wrongCount} خطأ وسامحناك (السماحية ${ALLOWED_WRONG}).`;
+        }
+
+        return res.json({ ok: true, passed: true, message: msg });
+      } catch (e) {
+        return res.status(500).json({
+          ok: false,
+          message:
+            "✅ إجاباتك صحيحة لكن البوت ما قدر يعطي الرتبة. ارفع رتبة البوت فوق (موافق على الشروط) وفعل Manage Roles.",
+        });
       }
-
-      // add extra (اختياري)
-      if (EXTRA_ROLE_ID) {
-        await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${EXTRA_ROLE_ID}`);
-      }
-
-      return res.json({
-        ok: true,
-        passed: true,
-        message: "✅ تم التفعيل بنجاح وتم إعطاؤك رتبة (موافق على الشروط).",
-      });
     }
 
-    // لو رسب: أعطه غير موافق (ويشيل موافق لو موجود)
-    await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`);
+    // ====== رسوب ======
+    cooldown.set(uid, now); // ✅ محاولة فقط عند الرسوب
+
+    await discordRequest("PUT", `/guilds/${GUILD_ID}/members/${uid}/roles/${UNAPPROVED_ROLE_ID}`).catch(() => null);
     await discordRequest("DELETE", `/guilds/${GUILD_ID}/members/${uid}/roles/${APPROVED_ROLE_ID}`).catch(() => null);
 
     return res.json({
       ok: true,
       passed: false,
-      message: "❌ إجاباتك غير صحيحة. حاول بعد 15 دقيقة.",
+      message: `❌ عندك ${wrongCount} أخطاء. المسموح ${ALLOWED_WRONG} فقط. حاول بعد 15 دقيقة.`,
     });
   } catch (e) {
     console.error(e);

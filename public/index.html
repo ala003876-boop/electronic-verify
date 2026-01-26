@@ -1,99 +1,104 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
+<!DOCTYPE html>
+<html lang="ar">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>التفعيل الإلكتروني</title>
-  <style>
-    body{font-family:system-ui,Segoe UI,Tahoma,Arial;max-width:820px;margin:20px auto;padding:0 14px}
-    .card{border:1px solid #ddd;border-radius:12px;padding:14px;margin:12px 0}
-    input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;box-sizing:border-box}
-    textarea{min-height:70px}
-    button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .row>div{flex:1;min-width:240px}
-    .ok{color:green}
-    .bad{color:#b00020}
-  </style>
+<meta charset="UTF-8">
+<title>التفعيل الإلكتروني</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+  background:#0f172a;
+  color:#e5e7eb;
+  font-family:Tahoma;
+  direction:rtl;
+  padding:20px;
+}
+.box {
+  max-width:900px;
+  margin:auto;
+  background:#020617;
+  padding:25px;
+  border-radius:12px;
+}
+h1 { text-align:center; color:#38bdf8; }
+.q { margin-bottom:18px; }
+label { display:block; margin-bottom:6px; font-weight:bold; }
+.options label { font-weight:normal; margin-right:10px; }
+button {
+  width:100%;
+  padding:14px;
+  background:#22c55e;
+  border:none;
+  border-radius:10px;
+  font-size:16px;
+  cursor:pointer;
+}
+button:hover { background:#16a34a; }
+</style>
 </head>
 <body>
-  <h2>التفعيل الإلكتروني</h2>
 
-  <div class="card">
-    <p>1) سجّل دخول بديسكورد عشان نعرف حسابك ونقدر نعطيك الرول.</p>
-    <a href="/auth/login"><button>تسجيل الدخول عبر Discord</button></a>
-    <p id="authed" class="ok" style="display:none">✅ تم تسجيل الدخول، كمّل الإجابات تحت.</p>
-  </div>
+<div class="box">
+<h1>📋 التفعيل الإلكتروني</h1>
 
-  <form id="f" class="card">
-    <h3>الأسئلة</h3>
+<form method="POST" action="/submit">
 
-    <label>1- ماهو الرول بلاي برأيك</label>
-    <textarea name="q1" required></textarea>
+<div class="q">
+<label>1- ماهو الرول بلاي؟</label>
+<div class="options">
+<label><input type="radio" name="q1" value="true" required> تقمص الشخصية وتمثيل الحياة الواقعية</label>
+<label><input type="radio" name="q1" value="false"> اللعب بدون تقمص</label>
+</div>
+</div>
 
-    <label>2- ماهو (VDM)</label>
-    <input name="q2" required />
+<div class="q">
+<label>2- ماهو VDM؟</label>
+<div class="options">
+<label><input type="radio" name="q2" value="true" required> استخدام المركبة كسلاح</label>
+<label><input type="radio" name="q2" value="false"> صدم عرضي</label>
+</div>
+</div>
 
-    <label>3- ماهو (RDM)</label>
-    <input name="q3" required />
+<div class="q">
+<label>3- ماهو RDM؟</label>
+<div class="options">
+<label><input type="radio" name="q3" value="true" required> قتل بدون سبب</label>
+<label><input type="radio" name="q3" value="false"> دفاع عن النفس</label>
+</div>
+</div>
 
-    <label>4- متي يحق لك الصدم الاحترافي</label>
-    <input name="q4" required />
+<div class="q">
+<label>4- متى يحق الصدم الاحترافي؟</label>
+<div class="options">
+<label><input type="radio" name="q4" value="true" required> بعد 5 دقائق وأخذ الإذن</label>
+<label><input type="radio" name="q4" value="false"> مباشرة</label>
+</div>
+</div>
 
-    <label>5- اذا كنت برتبة رئيس رقباء يحق لك الاصطفاف العسكري</label>
-    <input name="q5" required />
+<div class="q">
+<label>5- هل يحق لرئيس رقباء الاصطفاف العسكري؟</label>
+<div class="options">
+<label><input type="radio" name="q5" value="false" required> لا</label>
+<label><input type="radio" name="q5" value="true"> نعم</label>
+</div>
+</div>
 
-    <label>6- في حال كانت عندك حالة اضطراري هل يحق لك قطع بلاغ زميلك</label>
-    <input name="q6" required />
+<div class="q">
+<label>6- هل يحق قطع بلاغ زميلك؟</label>
+<div class="options">
+<label><input type="radio" name="q6" value="false" required> لا</label>
+<label><input type="radio" name="q6" value="true"> نعم</label>
+</div>
+</div>
 
-    <label>7- هل يحق لك صعود الجبل بسياره سيدان او رياضه</label>
-    <input name="q7" required />
+<div class="q">
+<label>7- صعود الجبل بسيارة سيدان أو رياضية؟</label>
+<div class="options">
+<label><input type="radio" name="q7" value="false" required> لا</label>
+<label><input type="radio" name="q7" value="true"> نعم</label>
+</div>
+</div>
 
-    <label>8- هل يحق لك قطع بلاغ زميلك</label>
-    <input name="q8" required />
-
-    <hr />
-
-    <h3>الشروط (9-14)</h3>
-    <div class="card">
-      <div>9- يجب عليك الالتزام بقوانين العسكر وعدم القيادة بتهور أو بسرعات غير واقعية</div>
-      <div>10- يجب أن يكون لديك ميكروفون يعمل في اللعبة</div>
-      <div>11- في حال طلعت جبل بسيارة افرود يجب القيادة بشكل واقعي + المخالفات تسدد</div>
-      <div>12- يمنع التحدث خارج الرول بلاي</div>
-      <div>13- أي معلومة من خارج المدينة (يوتيوب/بث/ديسكورد) مخالفة</div>
-      <div>14- احترم تُحترم</div>
-    </div>
-
-    <label>اكتب (موافق) أو (نعم) للموافقة على الشروط</label>
-    <input name="agree" required />
-
-    <div style="margin-top:12px">
-      <button type="submit">إرسال</button>
-    </div>
-
-    <p id="msg"></p>
-  </form>
-
-  <script>
-    if (location.hash === "#authed") {
-      document.getElementById("authed").style.display = "block";
-    }
-
-    const f = document.getElementById("f");
-    const msg = document.getElementById("msg");
-
-    f.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      msg.textContent = "جاري التحقق...";
-      msg.className = "";
-
-      const data = new URLSearchParams(new FormData(f));
-      const r = await fetch("/submit", { method: "POST", body: data });
-      const j = await r.json().catch(() => ({ ok:false, msg:"Server error" }));
-
-      msg.textContent = j.msg || "";
-      msg.className = j.ok ? "ok" : "bad";
-    });
-  </script>
-</body>
-</html>
+<div class="q">
+<label>8- هل يحق قطع بلاغ زميلك؟</label>
+<div class="options">
+<label><input type="radio" name="q8" value="false" required> لا</label>

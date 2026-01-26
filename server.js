@@ -43,6 +43,88 @@ function parseCookies(req) {
   });
   return out;
 }
+function setCookie(res, name, value, opts = {}) {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  if (opts.httpOnly) parts.push("HttpOnly");
+  if (opts.secure) parts.push("Secure");
+  if (opts.sameSite) parts.push(`SameSite=${opts.sameSite}`);
+  if (opts.path) parts.push(`Path=${opts.path}`);
+  if (opts.maxAge) parts.push(`Max-Age=${opts.maxAge}`);
+  res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+// ===== Discord OAuth Login =====
+app.get("/auth/login", (req, res) => {
+  const redirectUri = `${BASE_URL}/auth/callback`;
+
+  const url =
+    "https://discord.com/api/oauth2/authorize" +
+    `?client_id=${encodeURIComponent(CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent("identify")}`;
+
+  res.redirect(url);
+});
+
+app.get("/auth/callback", async (req, res) => {
+  try {
+    const code = req.query.code;
+    if (!code) return res.status(400).send("Missing code");
+
+    const redirectUri = `${BASE_URL}/auth/callback`;
+
+    const body = new URLSearchParams();
+    body.set("client_id", CLIENT_ID);
+    body.set("client_secret", CLIENT_SECRET);
+    body.set("grant_type", "authorization_code");
+    body.set("code", code);
+    body.set("redirect_uri", redirectUri);
+
+    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+
+    if (!tokenRes.ok) {
+      const t = await tokenRes.text();
+      return res.status(400).send("OAuth token error: " + t);
+    }
+
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+
+    const meRes = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!meRes.ok) {
+      const t = await meRes.text();
+      return res.status(400).send("Fetch user error: " + t);
+    }
+
+    const me = await meRes.json();
+
+    setCookie(res, "uid", me.id, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 60 * 60 * 24, // يوم
+    });
+
+    res.redirect("/");
+  } catch (e) {
+    console.error("CALLBACK_ERROR:", e?.message || e);
+    res.status(500).send("Server error in callback");
+  }
+});
+
+app.get("/auth/logout", (req, res) => {
+  setCookie(res, "uid", "", { path: "/", maxAge: 0 });
+  res.redirect("/");
+});
 
 function shuffle(arr) {
   const a = [...arr];

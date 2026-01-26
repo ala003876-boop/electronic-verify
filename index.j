@@ -1,5 +1,9 @@
-// index.js - Discord.js v14
-require("dotenv").config();
+// index.js (discord.js v14)
+// Military codes: جيم-123, جيم-124...
+// Modal: name+tribe
+// Log channel: LOG_CHANNEL_ID
+// Storage: codes.json (على Render Free ممكن يضيع مع إعادة التشغيل)
+
 const fs = require("fs");
 const path = require("path");
 const {
@@ -12,161 +16,184 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  InteractionType,
   EmbedBuilder,
 } = require("discord.js");
 
+// ===== ENV =====
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
+const START_NUMBER = Number(process.env.START_NUMBER || 123);
+const CODE_PREFIX = process.env.CODE_PREFIX || "جيم-";
+
+// لو عندك CLIENT_ID في ENV استخدمه، إذا لا: حاولنا نجيبها من ready
+const CLIENT_ID = process.env.CLIENT_ID || null;
 
 if (!BOT_TOKEN || !GUILD_ID || !LOG_CHANNEL_ID) {
-  console.error("❌ نقص في متغيرات البيئة: BOT_TOKEN / GUILD_ID / LOG_CHANNEL_ID");
+  console.error("❌ نقص ENV: BOT_TOKEN / GUILD_ID / LOG_CHANNEL_ID");
+  process.exit(1);
+}
+if (!Number.isFinite(START_NUMBER)) {
+  console.error("❌ START_NUMBER لازم يكون رقم");
   process.exit(1);
 }
 
-const DATA_FILE = path.join(__dirname, "data.json");
+// ===== Storage =====
+const DB_FILE = path.join(__dirname, "codes.json");
 
-function loadData() {
-  if (!fs.existsSync(DATA_FILE)) {
-    const prefix = process.env.CODE_PREFIX || "جيم-";
-    const start = Number(process.env.START_NUMBER || 123);
-    const init = { prefix, nextNumber: start, claimed: [] };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(init, null, 2), "utf8");
+function loadDB() {
+  try {
+    if (!fs.existsSync(DB_FILE)) {
+      const init = { prefix: CODE_PREFIX, next: START_NUMBER, claimed: [] };
+      fs.writeFileSync(DB_FILE, JSON.stringify(init, null, 2), "utf8");
+      return init;
+    }
+    const data = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+    if (!data || typeof data.next !== "number") throw new Error("bad db");
+    if (!Array.isArray(data.claimed)) data.claimed = [];
+    if (!data.prefix) data.prefix = CODE_PREFIX;
+    return data;
+  } catch {
+    const init = { prefix: CODE_PREFIX, next: START_NUMBER, claimed: [] };
+    fs.writeFileSync(DB_FILE, JSON.stringify(init, null, 2), "utf8");
     return init;
   }
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+function saveDB(db) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), "utf8");
 }
 
-// تخصيص الكود التالي بشكل "ذرّي" (نحاول نتجنب تعارض بنفس اللحظة)
+// قفل بسيط لمنع تضارب لو جا شخصين بنفس اللحظة
 let lock = Promise.resolve();
 function withLock(fn) {
   lock = lock.then(fn).catch(() => {}).then(() => {});
   return lock;
 }
 
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
-});
+// ===== Discord client =====
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// ====== Register Slash Command ======
-async function registerCommands() {
+// ===== Register /كود =====
+async function registerCommands(appId) {
   const commands = [
     new SlashCommandBuilder()
-      .setName("code")
+      .setName("كود")
       .setDescription("استلام كود عسكري بالترتيب (جيم-123 ثم 124...)")
       .toJSON(),
   ];
 
   const rest = new REST({ version: "10" }).setToken(BOT_TOKEN);
-  await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), {
+
+  await rest.put(Routes.applicationGuildCommands(appId, GUILD_ID), {
     body: commands,
   });
-  console.log("✅ تم تسجيل أوامر السلاش داخل السيرفر");
+
+  console.log("✅ تم تسجيل الأمر /كود");
 }
 
+// ===== Ready =====
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-  await registerCommands();
+
+  try {
+    const appId = CLIENT_ID || client.application?.id;
+    if (!appId) {
+      console.error("❌ ما قدرت أحدد CLIENT_ID. أضفه في ENV باسم CLIENT_ID.");
+      return;
+    }
+    await registerCommands(appId);
+  } catch (e) {
+    console.error("REGISTER_ERROR:", e?.message || e);
+  }
 });
 
-// ====== /code -> Modal ======
+// ===== Interaction =====
 client.on("interactionCreate", async (interaction) => {
   try {
-    // أمر سلاش
-    if (interaction.isChatInputCommand()) {
-      if (interaction.commandName !== "code") return;
-
+    // /كود -> Modal
+    if (interaction.isChatInputCommand() && interaction.commandName === "كود") {
       const modal = new ModalBuilder()
         .setCustomId("mil_code_modal")
         .setTitle("استلام كود عسكري");
 
       const nameInput = new TextInputBuilder()
-        .setCustomId("fullName")
-        .setLabel("اكتب اسمك واسم قبيلتك")
+        .setCustomId("full_name")
+        .setLabel("اسمك + اسم القبيلة (مثال: بكر الشراري)")
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder("مثال: بكر الشراري")
-        .setRequired(true)
-        .setMaxLength(60);
+        .setMinLength(3)
+        .setMaxLength(60)
+        .setRequired(true);
 
-      const row = new ActionRowBuilder().addComponents(nameInput);
-      modal.addComponents(row);
-
+      modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
       return interaction.showModal(modal);
     }
 
-    // استلام المودال
-    if (interaction.isModalSubmit()) {
-      if (interaction.customId !== "mil_code_modal") return;
-
-      const fullName = interaction.fields.getTextInputValue("fullName").trim();
+    // Modal Submit
+    if (interaction.type === InteractionType.ModalSubmit && interaction.customId === "mil_code_modal") {
+      const fullName = interaction.fields.getTextInputValue("full_name").trim();
       const userId = interaction.user.id;
 
-      // تخصيص الكود داخل Lock
       await withLock(async () => {
-        const data = loadData();
+        const db = loadDB();
 
-        // لو المستخدم أخذ كود قبل؟ (اختياري) — نخليه ياخذ مرة وحدة
-        const already = data.claimed.find((x) => x.userId === userId);
+        // (اختياري) منع الشخص ياخذ كود ثاني — حالياً مفعل ✅
+        const already = db.claimed.find((x) => x.userId === userId);
         if (already) {
           const embed = new EmbedBuilder()
             .setTitle("✅ عندك كود مسبقًا")
-            .setDescription(`**اسمك:** ${already.fullName}\n**كودك:** \`${already.code}\``)
-            .setFooter({ text: "إذا تبي إعادة تعيين/تغيير، كلّم الإدارة." });
+            .setDescription(`**اسمك:** ${already.name}\n**كودك:** \`${already.code}\``)
+            .setFooter({ text: "إذا تبي تغيير/إعادة تعيين كلم الإدارة." });
 
-          await interaction.reply({ embeds: [embed], ephemeral: true });
-          return;
+          return interaction.reply({ ephemeral: true, embeds: [embed] });
         }
 
-        const prefix = data.prefix || (process.env.CODE_PREFIX || "جيم-");
-        const code = `${prefix}${data.nextNumber}`;
+        const code = `${db.prefix || CODE_PREFIX}${db.next}`;
+        db.next += 1;
 
-        // حدّث الرقم القادم
-        data.nextNumber = Number(data.nextNumber) + 1;
-
-        // سجّل
-        data.claimed.push({
+        db.claimed.push({
           userId,
-          fullName,
+          name: fullName,
           code,
           at: new Date().toISOString(),
         });
 
-        saveData(data);
+        saveDB(db);
 
-        // رد للمستخدم (خاص)
+        // رد خاص للشخص
         const embedUser = new EmbedBuilder()
-          .setTitle("✅ تم إصدار كودك العسكري")
-          .setDescription(`**الاسم:** ${fullName}\n**الكود:** \`${code}\``)
-          .setFooter({ text: "احتفظ بالكود ولا تشاركه." });
+          .setTitle("🪖 تم إصدار كودك العسكري")
+          .setDescription(`**${fullName}-${code}**`)
+          .setFooter({ text: "احتفظ بالكود." });
 
-        await interaction.reply({ embeds: [embedUser], ephemeral: true });
+        await interaction.reply({ ephemeral: true, embeds: [embedUser] });
 
-        // لوق في روم
+        // لوق في الروم
         const logCh = await client.channels.fetch(LOG_CHANNEL_ID).catch(() => null);
         if (logCh && logCh.isTextBased()) {
           const embedLog = new EmbedBuilder()
-            .setTitle("📌 كود تم أخذه")
+            .setTitle("✅ كود تم أخذه")
             .setDescription(`**${code}** تم أخذه بواسطة **${fullName}**\n<@${userId}> \`(${userId})\``)
             .setTimestamp(new Date());
 
           await logCh.send({ embeds: [embedLog] });
         }
       });
+
+      return;
     }
   } catch (e) {
-    console.error("INTERACTION_ERROR:", e);
-    if (interaction.isRepliable()) {
-      try {
-        await interaction.reply({
-          ephemeral: true,
-          content: "❌ صار خطأ. جرّب مرة ثانية، وإذا تكرر كلم الإدارة.",
-        });
-      } catch {}
-    }
+    console.error("INTERACTION_ERROR:", e?.message || e);
+    try {
+      if (interaction.isRepliable()) {
+        if (interaction.deferred || interaction.replied) {
+          await interaction.followUp({ ephemeral: true, content: "❌ صار خطأ. جرّب مرة ثانية." });
+        } else {
+          await interaction.reply({ ephemeral: true, content: "❌ صار خطأ. جرّب مرة ثانية." });
+        }
+      }
+    } catch {}
   }
 });
 

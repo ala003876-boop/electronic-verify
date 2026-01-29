@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>التفعيل الإلكتروني T15 لـ </title>
+  <title>التفعيل الإلكتروني T15 </title>
   <style>
     body{margin:0;font-family:system-ui;background:#0b1220;color:#e8eefc}
     .wrap{max-width:900px;margin:30px auto;padding:16px}
     .card{background:#0f1a2e;border:1px solid #22355e;border-radius:14px;padding:16px;margin-bottom:12px}
     .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
-    .btn{cursor:pointer;border:0;border-radius:12px;padding:12px 16px;font-weight:700}
+    .btn{cursor:pointer;border:0;border-radius:12px;padding:12px 16px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
     .btn.primary{background:#22c55e;color:#06130b}
     .btn.gray{background:#334155;color:#fff}
     .btn:disabled{opacity:.5;cursor:not-allowed}
     .qtitle{font-weight:800;margin:0 0 10px 0}
     .opt{display:flex;gap:10px;align-items:center;margin:8px 0}
-    .banner{padding:10px 12px;border-radius:12px;margin:10px 0}
+    .banner{padding:10px 12px;border-radius:12px;margin:10px 0;white-space:pre-line}
     .err{background:#3b0d0d;border:1px solid #7f1d1d}
     .ok{background:#05250f;border:1px solid #14532d}
     .muted{opacity:.75}
@@ -29,7 +29,7 @@
       padding:16px;
     }
     #successModal .box{
-      max-width:540px; margin:12vh auto;
+      max-width:560px; margin:12vh auto;
       background:#0b1220; border:1px solid rgba(255,255,255,.12);
       border-radius:16px; padding:18px;
       box-shadow:0 10px 35px rgba(0,0,0,.5);
@@ -39,7 +39,7 @@
       margin-bottom:10px;
     }
     #successModal h2{margin:0; color:#22c55e; font-size:22px;}
-    #successModal p{margin:10px 0 0; color:#e5e7eb; line-height:1.9;}
+    #successModal p{margin:10px 0 0; color:#e5e7eb; line-height:1.9; white-space:pre-line;}
     #successModal .actions{margin-top:16px; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;}
     #successModal .closeBtn{
       background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer;
@@ -51,7 +51,7 @@
     <div class="card">
       <div class="row">
         <div>
-          <div style="font-size:22px;font-weight:900">التفعيل الإلكتروني T15 </div>
+          <div style="font-size:22px;font-weight:900">التفعيل الإلكتروني T15 📄</div>
           <div class="muted">اختر الإجابات الصحيحة ثم اضغط إرسال.</div>
         </div>
         <div id="authBox"></div>
@@ -63,6 +63,7 @@
 
     <div id="questions"></div>
 
+    <!-- ✅ أعطينا هذا الكرت ID عشان نخفيه بعد النجاح -->
     <div class="card" id="submitCard">
       <div style="font-weight:900;margin-bottom:10px">الموافقة على الشروط</div>
       <label class="opt">
@@ -87,13 +88,17 @@
       <p id="successText">تم التفعيل بنجاح 🎉</p>
 
       <div class="actions">
-  <a class="btn primary" id="goDiscordBtn" href="#" target="_blank" rel="noopener">اذهب للدسكورد</a>
-  <button class="btn gray" id="refreshBtn" type="button">تحديث الصفحة</button>
-</div> 
+        <a class="btn primary" id="goDiscordBtn" href="#" target="_blank" rel="noopener">اذهب للدسكورد</a>
+        <button class="btn gray" id="refreshBtn" type="button">تحديث الصفحة</button>
+      </div>
     </div>
   </div>
 
 <script>
+/* ضع رابط دعوة سيرفرك هنا */
+const DISCORD_INVITE_URL = "https://discord.gg/5ByfhYY9S6";
+
+
 let state = { loggedIn:false, questions:[], cooldown:0, allowedWrong:2 };
 let chosen = new Map(); // qid -> optionKey
 
@@ -176,40 +181,33 @@ function renderQuestions(){
 function openSuccessModal(message){
   const modal = document.getElementById("successModal");
   const text = document.getElementById("successText");
- if(out && out.passed === true){
-  hideAfterPass();
-  openSuccessModal("🎉 مبروك تم التفعيل بنجاح ✅\nاضغط (اذهب لانتظار الدعم لاستلام كودك العسكري).");
-  return;
+  if(text) text.textContent = message || "مبروك تم التفعيل بنجاح ✅";
+  if(modal) modal.style.display = "block";
 }
-
-function closeSuccessModal(){// ضع رابط دعوة سيرفرك هنا:
-const DISCORD_INVITE_URL = "https://discord.gg/5ByfhYY9S6";
-function hideAfterPass(){
-  // اخفاء الأسئلة
-  const q = document.getElementById("questions");
-  if(q) q.style.display = "none";
-
-  // اخفاء كرت الإرسال
-  const submitCard = document.getElementById("submitCard");
-  if(submitCard) submitCard.style.display = "none";
-
-  // اخفاء رسائل الكولداون/التنبيه
-  const cd = document.getElementById("cooldownBox");
-  if(cd) cd.style.display = "none";
-  const msg = document.getElementById("msgBox");
-  if(msg) msg.style.display = "none";
-
-  // تفعيل زر الدسكورد
-  const go = document.getElementById("goDiscordBtn");
-  if(go) go.href = DISCORD_INVITE_URL;
-}
-
+function closeSuccessModal(){
   const modal = document.getElementById("successModal");
   if(modal) modal.style.display = "none";
 }
 
+/* اخفاء كل شيء بعد النجاح + تفعيل زر الدسكورد */
+function hideAfterPass(){
+  const q = document.getElementById("questions");
+  if(q) q.style.display = "none";
+
+  const submitCard = document.getElementById("submitCard");
+  if(submitCard) submitCard.style.display = "none";
+
+  const cd = document.getElementById("cooldownBox");
+  if(cd) cd.style.display = "none";
+
+  const msg = document.getElementById("msgBox");
+  if(msg) msg.style.display = "none";
+
+  const go = document.getElementById("goDiscordBtn");
+  if(go) go.href = DISCORD_INVITE_URL;
+}
+
 document.getElementById("closeSuccess").addEventListener("click", closeSuccessModal);
-document.getElementById("successOk").addEventListener("click", closeSuccessModal);
 document.getElementById("refreshBtn").addEventListener("click", ()=> location.reload());
 document.getElementById("successModal").addEventListener("click", (e)=>{
   if(e.target && e.target.id === "successModal") closeSuccessModal();
@@ -260,17 +258,15 @@ document.getElementById("submitBtn").addEventListener("click", async ()=>{
     return;
   }
 
-  // عرض رسالة سريعة فوق (اختياري)
-  showMsg(out.message || "تم", !!out.passed);
-
-  // ✅ إذا نجح: افتح خانة مبروك ولا تعيد تحميل مباشرة
+  // ✅ إذا نجح: اخفي كل شيء وطلع خانة مبروك + زر الدسكورد
   if(out && out.passed === true){
-    openSuccessModal(out.message || "مبروك تم التفعيل بنجاح ✅");
-    // نوقف هنا عشان ما تختفي الخانة بسبب load()
+    hideAfterPass();
+    openSuccessModal("🎉 مبروك تم التفعيل بنجاح ✅\nاضغط (اذهب للدسكورد).");
     return;
   }
 
-  // ❌ إذا رسب: نعيد تحميل عشان يظهر الكولداون والأسئلة الجديدة
+  // ❌ إذا رسب: تظهر رسالة + نعيد تحميل عشان يظهر الكولداون والأسئلة الجديدة
+  showMsg(out.message || "تم", false);
   await load();
 });
 

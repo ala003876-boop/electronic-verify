@@ -63,7 +63,7 @@
 
     <div id="questions"></div>
 
-    <div class="card">
+    <div class="card" id="submitCard">
       <div style="font-weight:900;margin-bottom:10px">الموافقة على الشروط</div>
       <label class="opt">
         <input type="checkbox" id="agree" />
@@ -87,9 +87,9 @@
       <p id="successText">تم التفعيل بنجاح 🎉</p>
 
       <div class="actions">
-        <button class="btn gray" id="refreshBtn" type="button">تحديث الصفحة</button>
-        <button class="btn primary" id="successOk" type="button">تمام</button>
-      </div>
+  <a class="btn primary" id="goDiscordBtn" href="#" target="_blank" rel="noopener">اذهب للدسكورد</a>
+  <button class="btn gray" id="refreshBtn" type="button">تحديث الصفحة</button>
+</div> 
     </div>
   </div>
 
@@ -176,10 +176,34 @@ function renderQuestions(){
 function openSuccessModal(message){
   const modal = document.getElementById("successModal");
   const text = document.getElementById("successText");
-  if(text) text.textContent = message || "مبروك تم التفعيل بنجاح ✅";
-  if(modal) modal.style.display = "block";
+ if(out && out.passed === true){
+  hideAfterPass();
+  openSuccessModal("🎉 مبروك تم التفعيل بنجاح ✅\nاضغط (اذهب لانتظار الدعم لاستلام كودك العسكري).");
+  return;
 }
-function closeSuccessModal(){
+
+function closeSuccessModal(){// ضع رابط دعوة سيرفرك هنا:
+const DISCORD_INVITE_URL = "https://discord.gg/5ByfhYY9S6";
+function hideAfterPass(){
+  // اخفاء الأسئلة
+  const q = document.getElementById("questions");
+  if(q) q.style.display = "none";
+
+  // اخفاء كرت الإرسال
+  const submitCard = document.getElementById("submitCard");
+  if(submitCard) submitCard.style.display = "none";
+
+  // اخفاء رسائل الكولداون/التنبيه
+  const cd = document.getElementById("cooldownBox");
+  if(cd) cd.style.display = "none";
+  const msg = document.getElementById("msgBox");
+  if(msg) msg.style.display = "none";
+
+  // تفعيل زر الدسكورد
+  const go = document.getElementById("goDiscordBtn");
+  if(go) go.href = DISCORD_INVITE_URL;
+}
+
   const modal = document.getElementById("successModal");
   if(modal) modal.style.display = "none";
 }

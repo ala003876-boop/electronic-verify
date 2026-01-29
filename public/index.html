@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>التفعيل الإلكتروني</title>
+  <title>التفعيل الإلكتروني T15 لـ </title>
   <style>
     body{margin:0;font-family:system-ui;background:#0b1220;color:#e8eefc}
     .wrap{max-width:900px;margin:30px auto;padding:16px}
@@ -21,6 +21,29 @@
     .muted{opacity:.75}
     .hr{height:1px;background:#22355e;margin:14px 0}
     a{color:#93c5fd}
+
+    /* ===== Success Modal ===== */
+    #successModal{
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.55); z-index:9999;
+      padding:16px;
+    }
+    #successModal .box{
+      max-width:540px; margin:12vh auto;
+      background:#0b1220; border:1px solid rgba(255,255,255,.12);
+      border-radius:16px; padding:18px;
+      box-shadow:0 10px 35px rgba(0,0,0,.5);
+    }
+    #successModal .top{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-bottom:10px;
+    }
+    #successModal h2{margin:0; color:#22c55e; font-size:22px;}
+    #successModal p{margin:10px 0 0; color:#e5e7eb; line-height:1.9;}
+    #successModal .actions{margin-top:16px; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;}
+    #successModal .closeBtn{
+      background:transparent; border:none; color:#fff; font-size:22px; cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -28,7 +51,7 @@
     <div class="card">
       <div class="row">
         <div>
-          <div style="font-size:22px;font-weight:900">التفعيل الإلكتروني 📄</div>
+          <div style="font-size:22px;font-weight:900">التفعيل الإلكتروني T15 </div>
           <div class="muted">اختر الإجابات الصحيحة ثم اضغط إرسال.</div>
         </div>
         <div id="authBox"></div>
@@ -50,6 +73,22 @@
       <button class="btn primary" id="submitBtn" disabled>إرسال</button>
       <div class="muted" style="margin-top:8px">
         ملاحظة: محاولة جديدة بعد الرسوب فقط كل 15 دقيقة. السماحية: <span id="allowedWrong">2</span> أخطاء.
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Success Modal -->
+  <div id="successModal">
+    <div class="box">
+      <div class="top">
+        <h2>✅ مبروك</h2>
+        <button class="closeBtn" id="closeSuccess" type="button">✖</button>
+      </div>
+      <p id="successText">تم التفعيل بنجاح 🎉</p>
+
+      <div class="actions">
+        <button class="btn gray" id="refreshBtn" type="button">تحديث الصفحة</button>
+        <button class="btn primary" id="successOk" type="button">تمام</button>
       </div>
     </div>
   </div>
@@ -133,6 +172,25 @@ function renderQuestions(){
   updateSubmitEnabled();
 }
 
+/* ===== Success Modal helpers ===== */
+function openSuccessModal(message){
+  const modal = document.getElementById("successModal");
+  const text = document.getElementById("successText");
+  if(text) text.textContent = message || "مبروك تم التفعيل بنجاح ✅";
+  if(modal) modal.style.display = "block";
+}
+function closeSuccessModal(){
+  const modal = document.getElementById("successModal");
+  if(modal) modal.style.display = "none";
+}
+
+document.getElementById("closeSuccess").addEventListener("click", closeSuccessModal);
+document.getElementById("successOk").addEventListener("click", closeSuccessModal);
+document.getElementById("refreshBtn").addEventListener("click", ()=> location.reload());
+document.getElementById("successModal").addEventListener("click", (e)=>{
+  if(e.target && e.target.id === "successModal") closeSuccessModal();
+});
+
 async function load(){
   hideMsg();
   const res = await fetch("/api/questions");
@@ -155,7 +213,6 @@ document.getElementById("submitBtn").addEventListener("click", async ()=>{
     return;
   }
 
-  // تأكيد: لازم جاوب الكل
   if(chosen.size !== state.questions.length){
     showMsg("لازم تجاوب على كل الأسئلة قبل الإرسال.");
     return;
@@ -179,10 +236,17 @@ document.getElementById("submitBtn").addEventListener("click", async ()=>{
     return;
   }
 
+  // عرض رسالة سريعة فوق (اختياري)
   showMsg(out.message || "تم", !!out.passed);
 
-  // لو رسب => نعيد تحميل عشان يظهر كولداون
-  // ولو نجح => نعيد تحميل لعرض حالته
+  // ✅ إذا نجح: افتح خانة مبروك ولا تعيد تحميل مباشرة
+  if(out && out.passed === true){
+    openSuccessModal(out.message || "مبروك تم التفعيل بنجاح ✅");
+    // نوقف هنا عشان ما تختفي الخانة بسبب load()
+    return;
+  }
+
+  // ❌ إذا رسب: نعيد تحميل عشان يظهر الكولداون والأسئلة الجديدة
   await load();
 });
 
